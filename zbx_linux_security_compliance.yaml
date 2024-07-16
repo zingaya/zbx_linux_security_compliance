@@ -108,6 +108,17 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: security
+            - uuid: 76680ea2326b4f698727861d1107a2d9
+              expression: 'nodata(/Security and compliance/updates.pending,1w)=1'
+              name: 'No new audit data since 1 week'
+              opdata: 'Host: {HOSTNAME}'
+              priority: WARNING
+              description: |
+                Check if the script was successfully executed in this host.
+                Make sure at least, the script runs once per week, in order to maintain an updated status of this host.
+              tags:
+                - tag: scope
+                  value: security
             - uuid: ac79dd0531f746b4be6571f24197d70f
               expression: 'last(/Security and compliance/updates.pending)>0'
               name: 'Pending updates'
@@ -248,8 +259,7 @@ zabbix_export:
               trigger_prototypes:
                 - uuid: 205d7c9e87b648cb82a0f2c21671aad7
                   expression: 'find(/Security and compliance - agentless/os.kernel[{#HOSTNAME}],,"iregexp","{#KERNEL.DEPRECATED}")=1'
-                  name: 'Linux kernel deprecated for {#HOSTNAME}'
-                  event_name: 'Linux kernel deprecated'
+                  name: 'Linux kernel deprecated'
                   opdata: 'Host: {#HOSTNAME} Kernel: {ITEM.LASTVALUE1}'
                   priority: WARNING
                   tags:
@@ -281,21 +291,30 @@ zabbix_export:
               trigger_prototypes:
                 - uuid: 2b16d678861b441a883ea7ee6f49ce99
                   expression: 'last(/Security and compliance - agentless/updates.pending[{#HOSTNAME}])=9999'
-                  name: 'Error when retrieving updates for {#HOSTNAME}'
+                  name: 'Error when retrieving updates'
                   event_name: 'Error when retrieving updates'
                   opdata: 'Host: {#HOSTNAME}'
                   priority: WARNING
                   tags:
                     - tag: scope
                       value: security
+                - uuid: 23e63ec24547407186066a131d260e6f
+                  expression: 'nodata(/Security and compliance - agentless/updates.pending[{#HOSTNAME}],1w)=1'
+                  name: 'No new audit data since 1 week'
+                  opdata: 'Host: {#HOSTNAME}'
+                  priority: WARNING
+                  description: 'Check if the script was successfully executed in this host.'
+                  tags:
+                    - tag: scope
+                      value: security
                 - uuid: f7e733615e7d454c97823940c8c03553
                   expression: 'last(/Security and compliance - agentless/updates.pending[{#HOSTNAME}])>0'
-                  name: 'Pending updates for {#HOSTNAME}'
+                  name: 'Pending updates'
                   event_name: 'Pending updates'
                   opdata: 'Host: {#HOSTNAME} Pending: {ITEM.LASTVALUE1}'
                   priority: INFO
                   dependencies:
-                    - name: 'Error when retrieving updates for {#HOSTNAME}'
+                    - name: 'Error when retrieving updates'
                       expression: 'last(/Security and compliance - agentless/updates.pending[{#HOSTNAME}])=9999'
                   tags:
                     - tag: scope
@@ -310,8 +329,7 @@ zabbix_export:
                 last(/Security and compliance - agentless/os.distribution[{#HOSTNAME}])="Debian"
                 and
                 last(/Security and compliance - agentless/os.distribution_ver[{#HOSTNAME}])<12
-              name: 'Linux distribution is not compliant for {#HOSTNAME}'
-              event_name: 'Linux distribution is not compliant'
+              name: 'Linux distribution is not compliant'
               opdata: 'Host: {#HOSTNAME} Distro: {ITEM.LASTVALUE1} {ITEM.LASTVALUE2}'
               priority: INFO
               tags:

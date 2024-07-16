@@ -1,0 +1,80 @@
+- name: Check for pending updates
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Check updates for RHEL/CentOS/AlmaLinux using yum
+      block:
+        - name: Check updates using yum
+          yum:
+            list: updates
+          register: yum_updates
+          changed_when: false
+
+        - name: Parse yum updates
+          set_fact:
+            updates: "{{ yum_updates.results | list }}"
+
+      rescue:
+        - name: Log error
+          set_fact:
+            updates: "Error retrieving updates"
+      when: ansible_facts['distribution'] in ["RedHat", "CentOS", "AlmaLinux"]
+
+    - name: Check updates for Ubuntu/Debian using apt
+      block:
+        - name: Update apt cache
+          apt:
+            update_cache: yes
+            upgrade: no
+          changed_when: false
+
+        - name: List packages with repository information
+          shell: apt list --upgradeable | tail -n+2
+          register: apt_updates
+          changed_when: false
+
+        - name: Parse apt updates
+          set_fact:
+            updates: "{{ apt_updates.stdout_lines | map('regex_replace', '^(.*)$', '{\"name\": \"\\1\"}') | map('from_yaml') | list }}"
+
+      rescue:
+        - name: Log error
+          set_fact:
+            updates: "Error retrieving updates"
+      when: ansible_facts['distribution'] in ["Ubuntu", "Debian"]
+
+    - name: Get hostname
+      block:
+        - name: Get hostname from Zabbix Agent
+          shell: zabbix_agent2 -t agent.hostname || zabbix_agent -t agent.hostname || zabbix_agentd -t agent.hostname
+          register: cmd_output
+          changed_when: false
+
+        - name: Set hostname variable
+          set_fact:
+            hostname: "{{ cmd_output.stdout }}"
+
+      rescue:
+        - name: Get hostname from Linux
+          command: cat /etc/hostname
+          register: cmd_output
+          ignore_errors: true
+          changed_when: false
+
+        - name: Set hostname variable
+          set_fact:
+            hostname: "{{ cmd_output.stdout }}"
+
+    - name: Generate filename from hostname
+      set_fact:
+        filename: "{{ hostname | regex_replace('.*\\|(.+?)\\]', '\\1') }}.json"
+      delegate_to: localhost
+
+    - name: Write updates to JSON file
+      lineinfile:
+        path: /tmp/updates/{{ filename }}
+        line: "{{ {'hostname': hostname, 'current_date': now(utc=true), 'updates': updates, 'distro': ansible_facts['distribution'], 'distro_ver': ansible_facts['distribution_version'], 'kernel': ansible_facts['kernel'], 'ipv4_addresses': ansible_facts['all_ipv4_addresses'], 'ipv6_addresses': ansible_facts['all_ipv6_addresses']} | to_json }}"
+        create: yes
+        mode: '0644'
+      delegate_to: localhost
+
