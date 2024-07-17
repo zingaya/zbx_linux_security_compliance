@@ -5,8 +5,8 @@ import re
 import time
 from zabbix_utils import ItemValue, Sender
 
-playbook_path = "/root/sysadmin/playbooks/updates.yaml"
-inventory_path = "/root/sysadmin/playbooks/hosts"
+playbook_path = "/path/updates.yaml"
+inventory_path = "/path/hosts"
 zabbix_server = "x.x.x.x"
 zabbix_port = "10051"
 zabbix_def_hostname = 'Updates'
@@ -26,8 +26,11 @@ def main():
     noagents_raw = []
     zabbix_sender = Sender(server=zabbix_server, port=zabbix_port)
 
-    for filename in os.listdir('/tmp/updates/'):
-        os.remove('/tmp/updates/' + filename)
+    try:
+        for filename in os.listdir('/tmp/updates/'):
+            os.remove('/tmp/updates/' + filename)
+    except:
+        os.mkdir('/tmp/updates/')
 
     ansible_result = ansible_runner.run(playbook=playbook_path, inventory=inventory_path)
 
