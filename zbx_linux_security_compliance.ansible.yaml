@@ -1,16 +1,25 @@
 - name: Check for pending updates
   hosts: all
   gather_facts: yes
+  vars:
+    upgrade: "{{ upgrade_param }}"
   tasks:
-    - name: Check updates for RHEL/CentOS/AlmaLinux using yum
+    - name: Yum block
       block:
+        - name: Check updates using yum and upgrade
+          yum:
+            name: "*"
+            state: latest
+          when: upgrade == "yes"
+          ignore_errors: true
+
         - name: Check updates using yum
           yum:
             list: updates
           register: yum_updates
           changed_when: false
 
-        - name: Parse yum updates
+        - name: Parse yum updates pending
           set_fact:
             updates: "{{ yum_updates.results | list }}"
 
@@ -18,14 +27,14 @@
         - name: Log error
           set_fact:
             updates: "Error retrieving updates"
-      when: ansible_facts['distribution'] in ["RedHat", "CentOS", "AlmaLinux"]
+      when: ansible_facts['distribution'] in ["RedHat", "AlmaLinux", "CentOS"]
 
-    - name: Check updates for Ubuntu/Debian using apt
+    - name: Apt block
       block:
-        - name: Update apt cache
+        - name: Check updates using apt (Upgrade {{ upgrade_param }})
           apt:
             update_cache: yes
-            upgrade: no
+            upgrade: "{{ upgrade_param }}"
           changed_when: false
 
         - name: List packages with repository information
@@ -43,7 +52,7 @@
             updates: "Error retrieving updates"
       when: ansible_facts['distribution'] in ["Ubuntu", "Debian"]
 
-    - name: Get hostname
+    - name: Get hostname block
       block:
         - name: Get hostname from Zabbix Agent
           shell: zabbix_agent2 -t agent.hostname || zabbix_agent -t agent.hostname || zabbix_agentd -t agent.hostname

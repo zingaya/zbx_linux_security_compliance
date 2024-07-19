@@ -14,9 +14,7 @@ zabbix_export:
           name: 'Linux distribution'
           type: DEPENDENT
           key: os.distribution
-          delay: '0'
           history: 30d
-          trends: '0'
           value_type: CHAR
           preprocessing:
             - type: JSONPATH
@@ -29,12 +27,13 @@ zabbix_export:
             key: updates.raw
           tags:
             - tag: component
+              value: compliance
+            - tag: component
               value: os-distribution
         - uuid: 226341b98d594c02a3f4545a096a30dc
           name: 'Linux distribution version'
           type: DEPENDENT
           key: os.distribution_ver
-          delay: '0'
           history: 30d
           value_type: FLOAT
           preprocessing:
@@ -48,14 +47,14 @@ zabbix_export:
             key: updates.raw
           tags:
             - tag: component
+              value: compliance
+            - tag: component
               value: os-distribution
         - uuid: 6c59bb32cfd0424286357ff71dd0b70c
           name: 'Linux kernel'
           type: DEPENDENT
           key: os.kernel
-          delay: '0'
           history: 30d
-          trends: '0'
           value_type: CHAR
           preprocessing:
             - type: JSONPATH
@@ -68,12 +67,14 @@ zabbix_export:
             key: updates.raw
           tags:
             - tag: component
+              value: compliance
+            - tag: component
               value: os-kernel
           triggers:
             - uuid: bcda906fa93b4e608aa40d8e1101a3fc
-              expression: 'find(/Security and compliance/os.kernel,,"iregexp","{#KERNEL.DEPRECATED}")=1'
+              expression: 'find(/Security and compliance/os.kernel,,"iregexp","{$KERNEL.DEPRECATED}")=1'
               name: 'Linux kernel deprecated'
-              opdata: 'Host: {HOSTNAME} Kernel: {ITEM.LASTVALUE1}'
+              opdata: 'Kernel: {ITEM.LASTVALUE1}'
               priority: WARNING
               tags:
                 - tag: scope
@@ -82,7 +83,6 @@ zabbix_export:
           name: 'Pending updates'
           type: DEPENDENT
           key: updates.pending
-          delay: '0'
           preprocessing:
             - type: NOT_MATCHES_REGEX
               parameters:
@@ -98,12 +98,13 @@ zabbix_export:
             key: updates.raw
           tags:
             - tag: component
+              value: security
+            - tag: component
               value: updates
           triggers:
             - uuid: e36f6833042c4c1f8449d781cf7717ca
               expression: 'last(/Security and compliance/updates.pending)=9999'
               name: 'Error when retrieving updates'
-              opdata: 'Host: {HOSTNAME}'
               priority: WARNING
               tags:
                 - tag: scope
@@ -111,7 +112,6 @@ zabbix_export:
             - uuid: 76680ea2326b4f698727861d1107a2d9
               expression: 'nodata(/Security and compliance/updates.pending,1w)=1'
               name: 'No new audit data since 1 week'
-              opdata: 'Host: {HOSTNAME}'
               priority: WARNING
               description: |
                 Check if the script was successfully executed in this host.
@@ -122,7 +122,7 @@ zabbix_export:
             - uuid: ac79dd0531f746b4be6571f24197d70f
               expression: 'last(/Security and compliance/updates.pending)>0'
               name: 'Pending updates'
-              opdata: 'Host: {HOSTNAME} Pending: {ITEM.LASTVALUE1}'
+              opdata: 'Pending: {ITEM.LASTVALUE1}'
               priority: INFO
               dependencies:
                 - name: 'Error when retrieving updates'
@@ -130,24 +130,52 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: security
+        - uuid: f5dd53a4d9eb4c799c5dbde7c7636b49
+          name: 'Pending updates (list)'
+          type: DEPENDENT
+          key: updates.pending.list
+          history: 30d
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var obj = JSON.parse(value);
+                  names = '';
+                  var updates = obj[0].updates;
+                  for (var i = 0; i < updates.length; i++) {
+                      var name = updates[i].name;
+                      if (name.includes('/')) {
+                          name = name.split('/')[0];
+                      }
+                      names += name + '\n';
+                  }
+                  
+                  return names;
+                  
+          master_item:
+            key: updates.raw
+          tags:
+            - tag: component
+              value: security
+            - tag: component
+              value: updates
         - uuid: 8a9723bd6e004cc89245e8d79241c860
           name: 'Get updates'
           type: TRAP
           key: updates.raw
-          delay: '0'
           history: 1d
-          trends: '0'
           value_type: TEXT
           tags:
             - tag: component
               value: raw
       macros:
         - macro: '{$KERNEL.DEPRECATED}'
-          value: '^(4\.([0-9]|1[0-4])(\.[0-9]+)?|[0-3]\.[0-9]+(\.[0-9]+)?)'
+          value: '^[4]\.(1[0-4]|[0-9](?![0-9]))|^[1-3]\.[0-9]'
           description: 'Deprecated kernel regex'
     - uuid: 65d5cdc6b2ff4b5eb064d3683ef4ffd5
-      template: 'Security and compliance - agentless'
-      name: 'Security and compliance - agentless'
+      template: 'Security and compliance - ansible host'
+      name: 'Security and compliance - ansible host'
       groups:
         - name: 'Custom Templates'
       items:
@@ -155,195 +183,10 @@ zabbix_export:
           name: 'Ansible result'
           type: TRAP
           key: ansible.result
-          delay: '0'
-          trends: '0'
           value_type: TEXT
           tags:
             - tag: component
               value: ansible-log
-        - uuid: 3a7e09223eca4523a5f0810ab931972d
-          name: 'Get hosts'
-          type: TRAP
-          key: updates.hosts
-          delay: '0'
-          history: 1d
-          trends: '0'
-          value_type: TEXT
-          tags:
-            - tag: component
-              value: raw
-        - uuid: 2c87190221464e31996d2ba3f0a151bb
-          name: 'Get updates'
-          type: TRAP
-          key: updates.raw
-          delay: '0'
-          history: 1d
-          trends: '0'
-          value_type: TEXT
-          tags:
-            - tag: component
-              value: raw
-      discovery_rules:
-        - uuid: 7269b19ce00f4f62882308e48da8a1ac
-          name: 'Hosts without zabbix agent'
-          type: DEPENDENT
-          key: updates.lld
-          delay: '0'
-          lifetime: 90d
-          item_prototypes:
-            - uuid: 919ec82ab66649b7b3bb8f54cb5d1adf
-              name: 'Linux distribution for {#HOSTNAME}'
-              type: DEPENDENT
-              key: 'os.distribution[{#HOSTNAME}]'
-              delay: '0'
-              history: 30d
-              trends: '0'
-              value_type: CHAR
-              preprocessing:
-                - type: JSONPATH
-                  parameters:
-                    - '$.[?(@.hostname=="{#HOSTNAME}")].distro.first()'
-                - type: DISCARD_UNCHANGED_HEARTBEAT
-                  parameters:
-                    - 1m
-              master_item:
-                key: updates.raw
-              tags:
-                - tag: component
-                  value: compliance
-                - tag: component
-                  value: os-distribution
-            - uuid: dce8dd40f4ba4e56ac4eeb6fa517b5a9
-              name: 'Linux distribution version for {#HOSTNAME}'
-              type: DEPENDENT
-              key: 'os.distribution_ver[{#HOSTNAME}]'
-              delay: '0'
-              history: 30d
-              value_type: FLOAT
-              preprocessing:
-                - type: JSONPATH
-                  parameters:
-                    - '$.[?(@.hostname=="{#HOSTNAME}")].distro_ver.first()'
-                - type: DISCARD_UNCHANGED_HEARTBEAT
-                  parameters:
-                    - 1m
-              master_item:
-                key: updates.raw
-              tags:
-                - tag: component
-                  value: compliance
-                - tag: component
-                  value: os-distribution
-            - uuid: d7ab5c5b367144d1ad81174a7a6add30
-              name: 'Linux kernel for {#HOSTNAME}'
-              type: DEPENDENT
-              key: 'os.kernel[{#HOSTNAME}]'
-              delay: '0'
-              history: 30d
-              trends: '0'
-              value_type: CHAR
-              preprocessing:
-                - type: JSONPATH
-                  parameters:
-                    - '$.[?(@.hostname=="{#HOSTNAME}")].kernel.first()'
-                - type: DISCARD_UNCHANGED_HEARTBEAT
-                  parameters:
-                    - 1m
-              master_item:
-                key: updates.raw
-              tags:
-                - tag: component
-                  value: compliance
-                - tag: component
-                  value: os-kernel
-              trigger_prototypes:
-                - uuid: 205d7c9e87b648cb82a0f2c21671aad7
-                  expression: 'find(/Security and compliance - agentless/os.kernel[{#HOSTNAME}],,"iregexp","{#KERNEL.DEPRECATED}")=1'
-                  name: 'Linux kernel deprecated'
-                  opdata: 'Host: {#HOSTNAME} Kernel: {ITEM.LASTVALUE1}'
-                  priority: WARNING
-                  tags:
-                    - tag: scope
-                      value: security
-            - uuid: a22492cbeb4b4665b0cd4a9bd55ee1f9
-              name: 'Pending updates for {#HOSTNAME}'
-              type: DEPENDENT
-              key: 'updates.pending[{#HOSTNAME}]'
-              delay: '0'
-              preprocessing:
-                - type: NOT_MATCHES_REGEX
-                  parameters:
-                    - 'Error retrieving updates'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '9999'
-                - type: JSONPATH
-                  parameters:
-                    - '$.[?(@.hostname=="{#HOSTNAME}")].updates[*].name.length()'
-                  error_handler: CUSTOM_VALUE
-                  error_handler_params: '9999'
-              master_item:
-                key: updates.raw
-              tags:
-                - tag: component
-                  value: security
-                - tag: component
-                  value: updates
-              trigger_prototypes:
-                - uuid: 2b16d678861b441a883ea7ee6f49ce99
-                  expression: 'last(/Security and compliance - agentless/updates.pending[{#HOSTNAME}])=9999'
-                  name: 'Error when retrieving updates'
-                  event_name: 'Error when retrieving updates'
-                  opdata: 'Host: {#HOSTNAME}'
-                  priority: WARNING
-                  tags:
-                    - tag: scope
-                      value: security
-                - uuid: 23e63ec24547407186066a131d260e6f
-                  expression: 'nodata(/Security and compliance - agentless/updates.pending[{#HOSTNAME}],1w)=1'
-                  name: 'No new audit data since 1 week'
-                  opdata: 'Host: {#HOSTNAME}'
-                  priority: WARNING
-                  description: 'Check if the script was successfully executed in this host.'
-                  tags:
-                    - tag: scope
-                      value: security
-                - uuid: f7e733615e7d454c97823940c8c03553
-                  expression: 'last(/Security and compliance - agentless/updates.pending[{#HOSTNAME}])>0'
-                  name: 'Pending updates'
-                  event_name: 'Pending updates'
-                  opdata: 'Host: {#HOSTNAME} Pending: {ITEM.LASTVALUE1}'
-                  priority: INFO
-                  dependencies:
-                    - name: 'Error when retrieving updates'
-                      expression: 'last(/Security and compliance - agentless/updates.pending[{#HOSTNAME}])=9999'
-                  tags:
-                    - tag: scope
-                      value: security
-          trigger_prototypes:
-            - uuid: f1c40658937c4f1fad8b551cd3e57931
-              expression: |
-                last(/Security and compliance - agentless/os.distribution[{#HOSTNAME}])="AlmaLinux"
-                and
-                last(/Security and compliance - agentless/os.distribution_ver[{#HOSTNAME}])<8
-                or
-                last(/Security and compliance - agentless/os.distribution[{#HOSTNAME}])="Debian"
-                and
-                last(/Security and compliance - agentless/os.distribution_ver[{#HOSTNAME}])<12
-              name: 'Linux distribution is not compliant'
-              opdata: 'Host: {#HOSTNAME} Distro: {ITEM.LASTVALUE1} {ITEM.LASTVALUE2}'
-              priority: INFO
-              tags:
-                - tag: scope
-                  value: compliance
-          master_item:
-            key: updates.hosts
-          lld_macro_paths:
-            - lld_macro: '{#HOSTNAME}'
-              path: $.hostname
-      macros:
-        - macro: '{$KERNEL.DEPRECATED}'
-          value: '^(4\.([0-9]|1[0-4])(\.[0-9]+)?|[0-3]\.[0-9]+(\.[0-9]+)?)'
-          description: 'Deprecated kernel regex'
   triggers:
     - uuid: 084c8c341daa4521929838aa22ec826e
       expression: |
@@ -355,7 +198,7 @@ zabbix_export:
         and
         last(/Security and compliance/os.distribution_ver)<12
       name: 'Linux distribution is not compliant'
-      opdata: 'Host: {HOSTNAME} Distro: {ITEM.LASTVALUE1} {ITEM.LASTVALUE2}'
+      opdata: 'Distro: {ITEM.LASTVALUE1} {ITEM.LASTVALUE2}'
       priority: INFO
       tags:
         - tag: scope
