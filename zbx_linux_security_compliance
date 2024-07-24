@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ansible_runner
 import json
 import os
@@ -33,6 +34,7 @@ def generate_playbook(playbook_template, playbook_path, upgrade_param):
 
 def main():
     items = []
+    output = f""
     zabbix_sender = Sender(server=zabbix_server, port=zabbix_port)
 
     parser = argparse.ArgumentParser(description='Run Ansible playbook with optional parameters')
@@ -64,15 +66,18 @@ def main():
 
     os.remove('/tmp/sec_compliance_playbook.tmp')
 
-    json_files = [f for f in os.listdir('/tmp/updates/') if f.endswith('.json')]
-    
+    try:
+        json_files = [f for f in os.listdir('/tmp/updates/') if f.endswith('.json')]
+    except:
+        none
+
     if json_files:
         for filename in os.listdir('/tmp/updates/'):
             if filename.endswith('.json'):
                 filepath = os.path.join('/tmp/updates/', filename)
                 with open(filepath, 'r') as file:
                     data = json.load(file)
-                    
+
                 hostname = data['hostname']
                 if 'agent.hostname' in hostname:
                     match = re.search(r'\[s\|(.*)\]', hostname)
@@ -80,12 +85,11 @@ def main():
 
                 items.append(ItemValue(hostname, 'updates.raw', json.dumps([data]).replace("'", '"')))#.replace("[]", "null")))
 
-        print(f"Sending raw JSON from Servers with Zabbix agent")
-        #print(f"Debug: {items}")
+        output = f"Sending raw JSON from Servers with Zabbix agent\n"
         response = zabbix_sender.send(items)
-        print(f"Response from Zabbix: {response}\n")
+        output += f"Response from Zabbix: {response}\n\n"
 
-    print(f"Sending ansible log")
+    output += "Sending ansible log\n"
     with open(ansible_result.stdout.name, 'r') as stdout_file:
         stdout_content = stdout_file.read()
     with open(ansible_result.stderr.name, 'r') as stderr_file:
@@ -93,10 +97,9 @@ def main():
     clean_stdout = remove_ansi_escape_codes(stdout_content)
     clean_stderr = remove_ansi_escape_codes(stderr_content)
     combined_output = f"STDOUT:\n{clean_stdout}\n\nSTDERR:\n{clean_stderr}"
-    response = zabbix_sender.send_value(zabbix_def_hostname, 'ansible.result', combined_output)
-    print(f"Response from Zabbix: {response}")
-    
-    print(f"Done!")
 
+    combined_output = output + combined_output
+    response = zabbix_sender.send_value(zabbix_def_hostname, 'ansible.result', combined_output)
+    
 if __name__ == "__main__":
     main()
