@@ -58,6 +58,12 @@ The script supports the following command-line arguments:
 
 ## To do
 
-- Exclude package name to check and upgrade
-- Use the Zabbix API to verify if the host exists, and if not, create it
-- Include checks to get SELinux/Firewall status
+- Add parameters to exclude packages to check and upgrade
+- Use the Zabbix API to verify if the host exists, and if not, create it. Or create new items into zabbix_def_hostname (with Zabbix API, or LLD).
+- Include checks to get (some may require Zabbix agent):
+  - SELinux status
+  - Firewall status
+  - List of opened ports
+  - Users logged in
+  - Log audit
+  - Autorized processes
