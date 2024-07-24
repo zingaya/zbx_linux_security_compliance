@@ -2,11 +2,13 @@
 
 ## About
 
-This script was first intended to be as a patch management tool for Linux (for both yum and apt package managers), but added some extra items to keep track if is it compliant within the approved Linux distribtions for your company and kernel deprecation. 
+This script was first intended to be as a patch management tool for Linux (for both yum and apt package managers), but added some extra items to keep track if is it compliant within the approved Linux distribtions for the company and kernel deprecation. 
 
 It does not require that all hosts have a Zabbix agent installed, but you need to have the host in the Zabbix with the template "Linux - Security and compliance" that has the items and triggers needed. Also, there is an extra template that only contains a single item to "Linux - Security and compliance"
 
 The ansible playbook already define "all" as the hosts group on the inventory. You should setup you own inventory file and adapt those as needed.
+
+Designed for Zabbix 6.4 and above.
 
 ## Files
 
@@ -56,3 +58,4 @@ The script supports the following command-line arguments:
 
 - Exclude package name to check and upgrade
 - Use the Zabbix API to verify if the host exists, and if not, create it
+- Include checks to get SELinux/Firewall status
