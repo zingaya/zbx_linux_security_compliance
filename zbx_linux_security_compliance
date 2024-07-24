@@ -90,11 +90,13 @@ def main():
     parser.add_argument('--inventory', default=INVENTORY_PATH, help='Path to the inventory file')
     parser.add_argument('--limit', help='Limit the execution to a specific group or host')
     parser.add_argument('--upgrade', default='no', help='Set apt upgrade parameter (yes or no)')
+    parser.add_argument('--sshcheck', default='true', help='Check SSH key (true or false) Default: true')
     
     args = parser.parse_args()
 
     clean_temp_directory('/tmp/updates/')
-    os.environ['ANSIBLE_HOST_KEY_CHECKING'] = 'False'
+    os.environ['ANSIBLE_HOST_KEY_CHECKING'] = args.sshcheck
+
     generate_playbook(args.playbook, '/tmp/sec_compliance_playbook.tmp', args.upgrade)
     
     ansible_result = run_ansible_playbook('/tmp/sec_compliance_playbook.tmp', args.inventory, args.limit)
