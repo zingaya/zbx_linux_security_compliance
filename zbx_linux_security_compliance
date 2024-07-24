@@ -89,7 +89,7 @@ def main():
     parser.add_argument('--playbook', default=PLAYBOOK_PATH, help='Path to the playbook template')
     parser.add_argument('--inventory', default=INVENTORY_PATH, help='Path to the inventory file')
     parser.add_argument('--limit', help='Limit the execution to a specific group or host')
-    parser.add_argument('--upgrade', default='no', help='Set apt upgrade parameter (yes or no)')
+    parser.add_argument('--upgrade', default='no', help='Set apt/yum upgrade parameter (yes or no)')
     parser.add_argument('--sshcheck', default='true', help='Check SSH key (true or false) Default: true')
     
     args = parser.parse_args()
