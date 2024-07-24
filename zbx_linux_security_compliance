@@ -77,8 +77,7 @@ def process_json_files(directory, items):
 def send_to_zabbix(sender, items, combined_output):
     """Send data to Zabbix and append the response to combined_output."""
     response = sender.send(items)
-    output += f"Response from Zabbix: {response}\n\n"
-    combined_output += output
+    combined_output += f"Response from Zabbix: {response}\n\n"
     return combined_output
 
 def main():
@@ -87,7 +86,7 @@ def main():
     zabbix_sender = Sender(server=ZABBIX_SERVER, port=ZABBIX_PORT)
 
     parser = argparse.ArgumentParser(description='Run Ansible playbook with optional parameters')
-    parser.add_argument('--playbook_template', default=PLAYBOOK_PATH, help='Path to the playbook template')
+    parser.add_argument('--playbook', default=PLAYBOOK_PATH, help='Path to the playbook template')
     parser.add_argument('--inventory', default=INVENTORY_PATH, help='Path to the inventory file')
     parser.add_argument('--limit', help='Limit the execution to a specific group or host')
     parser.add_argument('--upgrade', default='no', help='Set apt upgrade parameter (yes or no)')
@@ -96,7 +95,7 @@ def main():
 
     clean_temp_directory('/tmp/updates/')
     os.environ['ANSIBLE_HOST_KEY_CHECKING'] = 'False'
-    generate_playbook(args.playbook_template, '/tmp/sec_compliance_playbook.tmp', args.upgrade)
+    generate_playbook(args.playbook, '/tmp/sec_compliance_playbook.tmp', args.upgrade)
     
     ansible_result = run_ansible_playbook('/tmp/sec_compliance_playbook.tmp', args.inventory, args.limit)
     os.remove('/tmp/sec_compliance_playbook.tmp')
