@@ -179,8 +179,8 @@ zabbix_export:
           value: '^[4]\.(1[0-4]|[0-9](?![0-9]))|^[1-3]\.[0-9]'
           description: 'Deprecated kernel regex'
     - uuid: 65d5cdc6b2ff4b5eb064d3683ef4ffd5
-      template: 'Linux - Security and compliance - ansible host'
-      name: 'Linux - Security and compliance - ansible host'
+      template: 'Linux - Security and compliance - ansible log'
+      name: 'Linux - Security and compliance - ansible log'
       description: |
         This template contains only the item to get the ansible playbook execution log
         Modify the zabbix_def_hostname in the python script to match the host where you assigned the template.
