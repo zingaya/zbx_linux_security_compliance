@@ -67,3 +67,4 @@ The script supports the following command-line arguments:
   - Users logged in
   - Log audit
   - Autorized processes
+- Improved triggers using Zabbix 7.0
