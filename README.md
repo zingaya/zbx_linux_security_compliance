@@ -16,6 +16,7 @@ Designed for Zabbix 6.4 and above.
 - zbx_linux_security_compliance: Python script
 - zbx_linux_security_compliance.yaml: Zabbix templates
 - No Ansible hosts inventory provided
+- discover.sh: Sh script to discover hosts with SSH open port and create Ansible like inventory file
 
 ## About the script
 
