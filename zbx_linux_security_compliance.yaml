@@ -5,8 +5,8 @@ zabbix_export:
       name: 'Custom Templates'
   templates:
     - uuid: f15c98400e5f47398a27d1c68b84627f
-      template: 'Security and compliance'
-      name: 'Security and compliance'
+      template: 'Linux - Security and compliance'
+      name: 'Linux - Security and compliance'
       groups:
         - name: 'Custom Templates'
       items:
@@ -22,7 +22,7 @@ zabbix_export:
                 - $..distro.first()
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
-                - '1'
+                - 1d
           master_item:
             key: updates.raw
           tags:
@@ -42,7 +42,7 @@ zabbix_export:
                 - $..distro_ver.first()
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
-                - 1m
+                - 1d
           master_item:
             key: updates.raw
           tags:
@@ -62,7 +62,7 @@ zabbix_export:
                 - $..kernel.first()
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
-                - 1m
+                - 1d
           master_item:
             key: updates.raw
           tags:
@@ -72,7 +72,7 @@ zabbix_export:
               value: os-kernel
           triggers:
             - uuid: bcda906fa93b4e608aa40d8e1101a3fc
-              expression: 'find(/Security and compliance/os.kernel,,"iregexp","{$KERNEL.DEPRECATED}")=1'
+              expression: 'find(/Linux - Security and compliance/os.kernel,,"iregexp","{$KERNEL.DEPRECATED}")=1'
               name: 'Linux kernel deprecated'
               opdata: 'Kernel: {ITEM.LASTVALUE1}'
               priority: WARNING
@@ -103,14 +103,17 @@ zabbix_export:
               value: updates
           triggers:
             - uuid: e36f6833042c4c1f8449d781cf7717ca
-              expression: 'last(/Security and compliance/updates.pending)=9999'
+              expression: 'last(/Linux - Security and compliance/updates.pending)=9999'
               name: 'Error when retrieving updates'
               priority: WARNING
               tags:
                 - tag: scope
                   value: security
             - uuid: 76680ea2326b4f698727861d1107a2d9
-              expression: 'nodata(/Security and compliance/updates.pending,1w)=1'
+              expression: |
+                nodata(/Linux - Security and compliance/updates.pending,1w)=1
+                or
+                count(/Linux - Security and compliance/updates.pending,1w)=0
               name: 'No new audit data since 1 week'
               priority: WARNING
               description: |
@@ -118,15 +121,17 @@ zabbix_export:
                 Make sure at least, the script runs once per week, in order to maintain an updated status of this host.
               tags:
                 - tag: scope
+                  value: compliance
+                - tag: scope
                   value: security
             - uuid: ac79dd0531f746b4be6571f24197d70f
-              expression: 'last(/Security and compliance/updates.pending)>0'
+              expression: 'last(/Linux - Security and compliance/updates.pending)>0'
               name: 'Pending updates'
               opdata: 'Pending: {ITEM.LASTVALUE1}'
               priority: INFO
               dependencies:
                 - name: 'Error when retrieving updates'
-                  expression: 'last(/Security and compliance/updates.pending)=9999'
+                  expression: 'last(/Linux - Security and compliance/updates.pending)=9999'
               tags:
                 - tag: scope
                   value: security
@@ -164,7 +169,7 @@ zabbix_export:
           name: 'Get updates'
           type: TRAP
           key: updates.raw
-          history: 1d
+          history: '0'
           value_type: TEXT
           tags:
             - tag: component
@@ -174,8 +179,11 @@ zabbix_export:
           value: '^[4]\.(1[0-4]|[0-9](?![0-9]))|^[1-3]\.[0-9]'
           description: 'Deprecated kernel regex'
     - uuid: 65d5cdc6b2ff4b5eb064d3683ef4ffd5
-      template: 'Security and compliance - ansible host'
-      name: 'Security and compliance - ansible host'
+      template: 'Linux - Security and compliance - ansible host'
+      name: 'Linux - Security and compliance - ansible host'
+      description: |
+        This template contains only the item to get the ansible playbook execution log
+        Modify the zabbix_def_hostname in the python script to match the host where you assigned the template.
       groups:
         - name: 'Custom Templates'
       items:
@@ -184,19 +192,20 @@ zabbix_export:
           type: TRAP
           key: ansible.result
           value_type: TEXT
+          description: 'Keep track of execution logs of the ansible playbook'
           tags:
             - tag: component
               value: ansible-log
   triggers:
     - uuid: 084c8c341daa4521929838aa22ec826e
       expression: |
-        last(/Security and compliance/os.distribution)="AlmaLinux"
+        last(/Linux - Security and compliance/os.distribution)="AlmaLinux"
         and
-        last(/Security and compliance/os.distribution_ver)<8
+        last(/Linux - Security and compliance/os.distribution_ver)<8
         or
-        last(/Security and compliance/os.distribution)="Debian"
+        last(/Linux - Security and compliance/os.distribution)="Debian"
         and
-        last(/Security and compliance/os.distribution_ver)<12
+        last(/Linux - Security and compliance/os.distribution_ver)<12
       name: 'Linux distribution is not compliant'
       opdata: 'Distro: {ITEM.LASTVALUE1} {ITEM.LASTVALUE2}'
       priority: INFO
