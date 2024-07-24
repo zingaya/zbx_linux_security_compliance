@@ -52,7 +52,8 @@ The script supports the following command-line arguments:
     --playbook_template: Path to the Ansible playbook template (default: configured PLAYBOOK_PATH).
     --inventory: Path to the Ansible inventory file (default: configured INVENTORY_PATH).
     --limit: Limit the execution to a specific group or host. (default: all)
-    --upgrade: Set apt upgrade parameter (yes or no, default: no).
+    --upgrade: Set apt/yum upgrade parameter (yes or no, default: no).
+    --sshcheck: Set ANSIBLE_HOST_KEY_CHECKING (true or false, default: true).
 
 ## To do
 
