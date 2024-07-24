@@ -7,7 +7,7 @@ subnets=$1
 excluded_ips=""
 
 # File to store the reachable hosts
-ansible_hosts_file="/root/sysadmin/playbooks/discovered-hosts"
+ansible_hosts_file="./discovered-hosts"
 
 # Initialize the Ansible hosts file
 echo "[all]" > $ansible_hosts_file
