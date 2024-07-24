@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# This script only discover open SSH port and create an Ansible inventory file. Doesn't check if you can actually login.
+# Define subnets manually in the variable below or execute this script with parameter.
+# Subnets mask are by default 255.255.255.0. If you need another mask, change the "for i in $(seq 1 254);" as you see fit.
+
 # Define the subnets
 subnets=$1
 
