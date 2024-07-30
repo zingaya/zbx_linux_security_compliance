@@ -25,13 +25,17 @@ def remove_ansi_escape_codes(text):
     ansi_escape = re.compile(r'\x1b\[([0-9;]*)m')
     return ansi_escape.sub('', text)
 
-def generate_playbook(playbook_template, playbook_path, upgrade_param):
+def generate_playbook(playbook_template, playbook_path, upgrade_param, lock_param, packages_param, become_param):
     """Generate a playbook file from a template with an upgrade parameter."""
     with open(playbook_template, 'r') as template_file:
         content = template_file.read()
     content = content.replace('{{ upgrade_param }}', upgrade_param)
+    content = content.replace('{{ lock_param }}', lock_param)
+    content = content.replace('{{ packages_param }}', json.dumps(packages_param))
+    content = content.replace('{{ become_param }}', become_param)
+
     with open(playbook_path, 'w') as playbook_file:
-        playbook_file.write(content)
+        playbook_file.write(content)        
 
 def clean_temp_directory(directory):
     """Remove and recreate a temporary directory."""
@@ -50,7 +54,7 @@ def run_ansible_playbook(playbook, inventory, limit=None):
     }
     return ansible_runner.run(**run_args)
 
-def process_json_files(directory, items):
+def process_json_files(directory, items, combined_output):
     """Process JSON files in a directory and append items to be sent to Zabbix."""
     try:
         json_files = [f for f in os.listdir(directory) if f.endswith('.json')]
@@ -90,19 +94,23 @@ def main():
     parser.add_argument('--inventory', default=INVENTORY_PATH, help='Path to the inventory file')
     parser.add_argument('--limit', help='Limit the execution to a specific group or host')
     parser.add_argument('--upgrade', default='no', help='Set apt/yum upgrade parameter (yes or no)')
-    parser.add_argument('--sshcheck', default='true', help='Check SSH key (true or false) Default: true')
-    
+    parser.add_argument('--sshcheck', default='true', help='Check SSH key (true or false)')
+    parser.add_argument('--lockstate', default='', help='Set packages to lock/hold or unlock/unhold (lock or unlock)')
+    parser.add_argument('--lockpackages', default='', help='Which packages to lock/hold or unlock/unhold. Use along with --lockstate')
+    parser.add_argument('--become', default='no', help='Escalate privileges (yes or no) Default: no')
+
     args = parser.parse_args()
 
     clean_temp_directory('/tmp/updates/')
-    os.environ['ANSIBLE_HOST_KEY_CHECKING'] = args.sshcheck
-
-    generate_playbook(args.playbook, '/tmp/sec_compliance_playbook.tmp', args.upgrade)
+    os.environ['ANSIBLE_HOST_KEY_CHECKING'] = 'false' if args.sshcheck.lower() == 'false' else 'true'
+    packages_split = args.lockpackages.split() if args.lockpackages else []
+    
+    generate_playbook(args.playbook, '/tmp/sec_compliance_playbook.tmp', args.upgrade, args.lockstate, packages_split, args.become)
     
     ansible_result = run_ansible_playbook('/tmp/sec_compliance_playbook.tmp', args.inventory, args.limit)
     os.remove('/tmp/sec_compliance_playbook.tmp')
 
-    process_json_files('/tmp/updates/', items)
+    process_json_files('/tmp/updates/', items, combined_output)
 
     if items:
         combined_output = send_to_zabbix(zabbix_sender, items, combined_output)

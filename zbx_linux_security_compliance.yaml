@@ -84,14 +84,14 @@ zabbix_export:
           type: DEPENDENT
           key: updates.pending
           preprocessing:
-            - type: NOT_MATCHES_REGEX
+            - type: JSONPATH
               parameters:
-                - 'Error retrieving updates'
+                - $..updates.first()
               error_handler: CUSTOM_VALUE
               error_handler_params: '9999'
             - type: JSONPATH
               parameters:
-                - '$..updates[*].name.length()'
+                - $..name.length()
               error_handler: CUSTOM_VALUE
               error_handler_params: '9999'
           master_item:
@@ -148,16 +148,14 @@ zabbix_export:
                   var obj = JSON.parse(value);
                   names = '';
                   var updates = obj[0].updates;
-                  for (var i = 0; i < updates.length; i++) {
-                      var name = updates[i].name;
-                      if (name.includes('/')) {
-                          name = name.split('/')[0];
+                  if (typeof updates === 'string') {return updates}
+                  else {
+                      for (var i = 0; i < updates.length; i++) {
+                          var name = updates[i].name;
+                          names += name + '\n';
                       }
-                      names += name + '\n';
-                  }
-                  
-                  return names;
-                  
+                      return names;
+                  };                  
           master_item:
             key: updates.raw
           tags:
