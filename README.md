@@ -56,9 +56,12 @@ The script supports the following command-line arguments:
 
     --playbook_template: Path to the Ansible playbook template (default: configured PLAYBOOK_PATH).
     --inventory: Path to the Ansible inventory file (default: configured INVENTORY_PATH).
-    --limit: Limit the execution to a specific group or host. (default: all)
+    --limit: Limit the execution to a specific group or host. (default: all).
     --upgrade: Set apt/yum upgrade parameter (yes or no, default: no).
     --sshcheck: Set ANSIBLE_HOST_KEY_CHECKING (true or false, default: true).
+    --lockstate: Set packages to lock/hold or unlock/unhold (lock or unlock).
+    --lockpackages: Which packages to lock/hold or unlock/unhold. Use along with --lockstate.
+    --become: Escalate privileges (yes or no) Default: no.
 
 ## To do
 
@@ -71,5 +74,5 @@ The script supports the following command-line arguments:
   - Users logged in
   - Log audit
   - Autorized processes
+  - /var/run/reboot-required
 - Improved triggers using Zabbix 7.0
-- Add a check /var/run/reboot-required
