@@ -37,9 +37,13 @@ Before running the script, ensure the following:
 - Ansible Playbook and Inventory: Provide paths to the Ansible playbook template and inventory file.
 - Zabbix Server Details: Configure the Zabbix server IP address and port.
 
-Install Required Python Libraries:
+Install required Python libraries:
 
     pip install ansible ansible-runner argparse shutil json re os zabbix-utils
+
+Install required Ansible collection:
+
+    ansible-galaxy collection install community.general
 
 Configure Script Parameters:
 
@@ -58,7 +62,7 @@ The script supports the following command-line arguments:
 
 ## To do
 
-- Add parameters to exclude packages to check and upgrade
+- ~~Add parameters to exclude packages to check and upgrade~~
 - Use the Zabbix API to verify if the host exists, and if not, create it. Or create new items into zabbix_def_hostname (with Zabbix API, or LLD).
 - Include checks to get (some may require Zabbix agent):
   - SELinux status
@@ -68,3 +72,4 @@ The script supports the following command-line arguments:
   - Log audit
   - Autorized processes
 - Improved triggers using Zabbix 7.0
+- Add a check /var/run/reboot-required
