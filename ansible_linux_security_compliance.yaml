@@ -13,13 +13,13 @@
           yum:
             name: yum-plugin-versionlock
             state: present
-          when: lock_action in ["lock", "unlock"]
 
         - name: Lock packages using yum-versionlock
           community.general.yum_versionlock:
             name: "{{ item }}"
             state: present
           loop: "{{ packages_to_handle }}"
+          register: lock_result
           when: lock_action == "lock"
 
         - name: Unlock packages using yum-versionlock
@@ -27,14 +27,29 @@
             name: "{{ item }}"
             state: absent
           loop: "{{ packages_to_handle }}"
+          register: unlock_result
           when: lock_action == "unlock"
+
+        - name: Get list of locked packages
+          shell: yum versionlock
+          register: lock_packages
+          changed_when: false
+
+        - name: debug
+          debug:
+            var: lock_packages
+
+        - name: Parse yum locked packages
+          set_fact:
+            locked: "{{ lock_packages.stdout_lines | select('match', '^(0:([^0-9-]+)|^([^:]+)-0:).*') | map('regex_replace', '^(0:([^0-9-]+)|^([^:]+)-0:).*', '{\"name\": \"\\2\\3\"}') | map('from_json') | list }}"
+          changed_when: false
 
         - name: Check updates using yum and upgrade
           yum:
             name: "*"
             state: latest
+          register: upgrade_result
           when: upgrade == "yes"
-          ignore_errors: true
 
         - name: Check updates using yum
           yum:
@@ -49,7 +64,20 @@
       rescue:
         - name: Log error
           set_fact:
-            updates: "{{ yum_updates.stderr }}"
+            updates: >-
+              {% if lock_action == "lock" %}
+              Error: {{ lock_result.results | selectattr('failed') | map(attribute='msg') | to_json }}
+              {% elif lock_action == "unlock" %}
+              Error: {{ unlock_result.results | selectattr('failed') | map(attribute='msg') | to_json }}
+              {% elif upgrade == "yes" and upgrade_result is failed %}
+              Error: {{ upgrade_result.msg }}
+              {% elif lock_packages is failed %}
+              Error: {{ lock_packages.stderr }}
+              {% elif yum_updates.rc != 0 %}
+              Error: {{ yum_updates.stderr }}
+              {% else %}
+              Error: Unknown
+              {% endif %}
       when: ansible_facts['distribution'] in ["RedHat", "AlmaLinux", "CentOS"]
 
     - name: Apt block
@@ -57,17 +85,20 @@
         - name: Lock packages using apt-mark hold
           command: apt-mark hold "{{ item }}"
           loop: "{{ packages_to_handle }}"
+          register: lock_result
           when: lock_action == "lock"
 
         - name: Unlock packages using apt-mark unhold
           command: apt-mark unhold "{{ item }}"
           loop: "{{ packages_to_handle }}"
+          register: unlock_result
           when: lock_action == "unlock"
 
         - name: Check updates using apt (Upgrade {{ upgrade_param }})
           apt:
             update_cache: yes
             upgrade: "{{ upgrade_param }}"
+          register: upgrade_result
           changed_when: false
 
         - name: List packages using apt
@@ -77,17 +108,35 @@
 
         - name: Get list of holded packages
           shell: apt-mark showhold
-          register: apt_hold
+          register: lock_packages
+          changed_when: false
+
+        - name: Parse apt locked packages
+          set_fact:
+            locked: "{{ lock_packages.stdout_lines | map('regex_replace', '^(.*)$', '{\"name\": \"\\1\"}') | map('from_json') | list }}"
           changed_when: false
 
         - name: Parse apt updates
           set_fact:
-            updates: "{{ apt_updates.stdout_lines | difference(apt_hold.stdout_lines) | map('regex_replace', '^(.*)$', '{\"name\": \"\\1\"}') | map('from_yaml') | list }}"
+            updates: "{{ apt_updates.stdout_lines | map('regex_replace', '^(.*)$', '{ \"name\": \"\\1\" }') | map('from_json') | list }}"
 
       rescue:
         - name: Log error
           set_fact:
-            updates: "{{ apt_updates.stderr }} {{ apt_hold.stderr }}"
+            updates: >-
+              {% if lock_action == "lock" %}
+              Error: {{ lock_result.results | selectattr('failed') | map(attribute='stderr') | to_json }}
+              {% elif lock_action == "unlock" %}
+              Error: {{ unlock_result.results | selectattr('failed') | map(attribute='stderr') | to_json }}
+              {% elif upgrade == "yes" and upgrade_result is failed %}
+              Error: {{ upgrade_result.msg }}
+              {% elif apt_updates.rc != 0 %}
+              Error: {{ apt_updates.stderr }}
+              {% elif lock_packages.rc != 0 %}
+              Error: {{ lock_packages.stderr }}
+              {% else %}
+              Error: Unknown
+              {% endif %}
       when: ansible_facts['distribution'] in ["Ubuntu", "Debian"]
 
     - name: Get hostname block
@@ -120,7 +169,7 @@
     - name: Write updates to JSON file
       lineinfile:
         path: /tmp/updates/{{ filename }}
-        line: "{{ {'hostname': hostname, 'current_date': now(utc=true), 'updates': updates, 'distro': ansible_facts['distribution'], 'distro_ver': ansible_facts['distribution_version'], 'kernel': ansible_facts['kernel'], 'ipv4_addresses': ansible_facts['all_ipv4_addresses'], 'ipv6_addresses': ansible_facts['all_ipv6_addresses']} | to_json }}"
+        line: "{{ {'hostname': hostname, 'current_date': now(utc=true), 'updates': updates, 'locked_packages': locked, 'distro': ansible_facts['distribution'], 'distro_ver': ansible_facts['distribution_version'], 'kernel': ansible_facts['kernel'], 'ipv4_addresses': ansible_facts['all_ipv4_addresses'], 'ipv6_addresses': ansible_facts['all_ipv6_addresses']} | to_json }}"
         create: yes
         mode: '0644'
       delegate_to: localhost

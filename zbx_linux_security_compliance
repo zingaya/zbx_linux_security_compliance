@@ -76,7 +76,8 @@ def process_json_files(directory, items, combined_output):
             if match:
                 hostname = match.group(1)
 
-        items.append(ItemValue(hostname, 'updates.raw', json.dumps([data]).replace("'", '"')))
+        #items.append(ItemValue(hostname, 'updates.raw', json.dumps([data]).replace("'", '"')))
+        items.append(ItemValue(hostname, 'updates.raw', json.dumps([data])))
 
 def send_to_zabbix(sender, items, combined_output):
     """Send data to Zabbix and append the response to combined_output."""

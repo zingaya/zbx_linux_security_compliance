@@ -1,3 +1,9 @@
+1.1.1
+Fixes:
+- Fixed and improved playbook error handling when locking/unlocking packages.
+Changes:
+- Added list of locked packages.
+
 1.1
 Changes:
 - Added new params to lock/hold and unlock/unhold packages.

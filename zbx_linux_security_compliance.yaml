@@ -79,6 +79,45 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: security
+        - uuid: 4599a40b2ead4fa59c349bcb2a28cb57
+          name: 'Locked updates (list)'
+          type: DEPENDENT
+          key: updates.lock.list
+          history: 30d
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var obj = JSON.parse(value);
+                  names = '';
+                  var locked_packages = obj[0].locked_packages;
+                  for (var i = 0; i < locked_packages.length; i++) {
+                      var name = locked_packages[i].name;
+                      names += name + '\n';
+                  }
+                  return names;
+                  };
+                  
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: updates.raw
+          tags:
+            - tag: component
+              value: security
+            - tag: component
+              value: updates
+          triggers:
+            - uuid: 2068736a311a47689ab156607d0a2026
+              expression: 'change(/Linux - Security and compliance/updates.lock.list)>0'
+              name: 'Locked packages have changed'
+              priority: INFO
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: security
         - uuid: ad65878915a04c479226b3377580f996
           name: 'Pending updates'
           type: DEPENDENT
@@ -102,13 +141,6 @@ zabbix_export:
             - tag: component
               value: updates
           triggers:
-            - uuid: e36f6833042c4c1f8449d781cf7717ca
-              expression: 'last(/Linux - Security and compliance/updates.pending)=9999'
-              name: 'Error when retrieving updates'
-              priority: WARNING
-              tags:
-                - tag: scope
-                  value: security
             - uuid: 76680ea2326b4f698727861d1107a2d9
               expression: |
                 nodata(/Linux - Security and compliance/updates.pending,1w)=1
@@ -131,7 +163,7 @@ zabbix_export:
               priority: INFO
               dependencies:
                 - name: 'Error when retrieving updates'
-                  expression: 'last(/Linux - Security and compliance/updates.pending)=9999'
+                  expression: 'find(/Linux - Security and compliance/updates.pending.list,,"iregexp","Error:")=1'
               tags:
                 - tag: scope
                   value: security
@@ -155,7 +187,8 @@ zabbix_export:
                           names += name + '\n';
                       }
                       return names;
-                  };                  
+                  };
+                  
           master_item:
             key: updates.raw
           tags:
@@ -163,6 +196,14 @@ zabbix_export:
               value: security
             - tag: component
               value: updates
+          triggers:
+            - uuid: e36f6833042c4c1f8449d781cf7717ca
+              expression: 'find(/Linux - Security and compliance/updates.pending.list,,"iregexp","Error:")=1'
+              name: 'Error when retrieving updates'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: security
         - uuid: 8a9723bd6e004cc89245e8d79241c860
           name: 'Get updates'
           type: TRAP
