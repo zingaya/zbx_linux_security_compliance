@@ -103,7 +103,7 @@ def main():
     args = parser.parse_args()
 
     clean_temp_directory('/tmp/updates/')
-    os.environ['ANSIBLE_HOST_KEY_CHECKING'] = 'false' if args.sshcheck.lower() == 'false' else 'true'
+    os.environ['ANSIBLE_HOST_KEY_CHECKING'] = args.sshcheck.lower()
     packages_split = args.lockpackages.split() if args.lockpackages else []
     
     generate_playbook(args.playbook, '/tmp/sec_compliance_playbook.tmp', args.upgrade, args.lockstate, packages_split, args.become)
