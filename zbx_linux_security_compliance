@@ -96,7 +96,7 @@ def main():
     parser.add_argument('--limit', help='Limit the execution to a specific group or host')
     parser.add_argument('--upgrade', default='no', help='Set apt/yum upgrade parameter (yes or no)')
     parser.add_argument('--sshcheck', default='true', help='Check SSH key (true or false)')
-    parser.add_argument('--lockstate', default='', help='Set packages to lock/hold or unlock/unhold (lock or unlock)')
+    parser.add_argument('--lockstate', default='none', help='Set packages to lock/hold or unlock/unhold (lock or unlock)')
     parser.add_argument('--lockpackages', default='', help='Which packages to lock/hold or unlock/unhold. Use along with --lockstate')
     parser.add_argument('--become', default='no', help='Escalate privileges (yes or no) Default: no')
 
