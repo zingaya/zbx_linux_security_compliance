@@ -63,10 +63,12 @@ The script supports the following command-line arguments:
     --lockpackages: Which packages to lock/hold or unlock/unhold. Use along with --lockstate.
     --become: Escalate privileges (yes or no) Default: no.
 
+Note on locking packages: For some versions of yum I noticed that it does not work with wildcards. Try to use the exact name of the packages you need to lock.
+
 ## To do
 
 - ~~Add parameters to exclude packages to check and upgrade~~
-- Use the Zabbix API to verify if the host exists, and if not, create it. Or create new items into zabbix_def_hostname (with Zabbix API, or LLD).
+- Use the Zabbix API to verify if the host exists, and if not, create it. Or create new items into zabbix_def_hostname (with Zabbix API, or LLD)
 - Include checks to get (some may require Zabbix agent):
   - SELinux status
   - Firewall status
@@ -75,4 +77,13 @@ The script supports the following command-line arguments:
   - Log audit
   - Autorized processes
   - /var/run/reboot-required
-- Improved triggers using Zabbix 7.0
+  - /etc/group
+  - /etc/passwd
+- Improve triggers using Zabbix 7.0
+- Add option to: Apt full-upgrade/Yum distro-sync
+- Add Dnf and Apk modules
+- Change to ansible_facts['pkg_mgr'] instead of ansible_facts['distribution']
+- Simplify lock/unlock package arguments
+- Use module async_status to handle parallel apt/yum/dnf/apk update/upgrade
+- On fail to lock packages, send/update list in Zabbix
+- Add ability to run this script more than once

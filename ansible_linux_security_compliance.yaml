@@ -35,13 +35,9 @@
           register: lock_packages
           changed_when: false
 
-        - name: debug
-          debug:
-            var: lock_packages
-
         - name: Parse yum locked packages
           set_fact:
-            locked: "{{ lock_packages.stdout_lines | select('match', '^(0:([^0-9-]+)|^([^:]+)-0:).*') | map('regex_replace', '^(0:([^0-9-]+)|^([^:]+)-0:).*', '{\"name\": \"\\2\\3\"}') | map('from_json') | list }}"
+            locked: "{{ lock_packages.stdout_lines | select('match', '^(0:([^0-9-]+)|^([^:]+)-0:).*') | map('regex_replace', '^(0:([^0-9-]+)|^([^:]+)-0:).*', '{\"name\": \"\\2\\3\"}') | map('from_json') | list | unique }}"
           changed_when: false
 
         - name: Check updates using yum and upgrade
