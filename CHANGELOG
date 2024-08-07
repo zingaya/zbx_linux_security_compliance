@@ -1,8 +1,11 @@
 1.1.1
 Fixes:
 - Fixed and improved playbook error handling when locking/unlocking packages.
+- Removed debug task.
 Changes:
 - Added list of locked packages.
+- Yum locked package list now uses unique. 
+  - Found out that it displays them for each version, and for consistency with apt listing, and want it to be a simple list the yaml do a regex to sanitize the package name. (ex: mysql-cluster-community-test-0:8.0.39-1.el8.* -> mysql-cluster-community-test)
 
 1.1
 Changes:

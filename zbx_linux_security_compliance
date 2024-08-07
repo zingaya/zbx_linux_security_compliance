@@ -6,6 +6,8 @@ import re
 import time
 import argparse
 import shutil
+import random
+import string
 from zabbix_utils import ItemValue, Sender
 
 # Constants for file paths and Zabbix configuration
@@ -16,17 +18,17 @@ ZABBIX_PORT = "10051"
 ZABBIX_DEF_HOSTNAME = 'myhost' # Which Zabbix host have the item to drop logs from this script
 
 def read_json_output(file_path):
-    """Read and return JSON data from a file."""
+    # Read and return JSON data from a file
     with open(file_path, 'r') as file:
         return json.load(file)
 
 def remove_ansi_escape_codes(text):
-    """Remove ANSI escape codes from a string."""
+    # Remove ANSI escape codes from a string
     ansi_escape = re.compile(r'\x1b\[([0-9;]*)m')
     return ansi_escape.sub('', text)
 
 def generate_playbook(playbook_template, playbook_path, upgrade_param, lock_param, packages_param, become_param):
-    """Generate a playbook file from a template with an upgrade parameter."""
+    # Generate a playbook file from a template with an upgrade parameter
     with open(playbook_template, 'r') as template_file:
         content = template_file.read()
     content = content.replace('{{ upgrade_param }}', upgrade_param)
@@ -38,7 +40,7 @@ def generate_playbook(playbook_template, playbook_path, upgrade_param, lock_para
         playbook_file.write(content)        
 
 def clean_temp_directory(directory):
-    """Remove and recreate a temporary directory."""
+    # Remove and recreate a temporary directory
     try:
         shutil.rmtree(directory)
     except FileNotFoundError:
@@ -46,7 +48,7 @@ def clean_temp_directory(directory):
     os.mkdir(directory)
 
 def run_ansible_playbook(playbook, inventory, limit=None):
-    """Run the Ansible playbook and return the result."""
+    # Run the Ansible playbook and return the result
     run_args = {
         'playbook': playbook,
         'inventory': inventory,
@@ -55,7 +57,7 @@ def run_ansible_playbook(playbook, inventory, limit=None):
     return ansible_runner.run(**run_args)
 
 def process_json_files(directory, items, combined_output):
-    """Process JSON files in a directory and append items to be sent to Zabbix."""
+    # Process JSON files in a directory and append items to be sent to Zabbix
     try:
         json_files = [f for f in os.listdir(directory) if f.endswith('.json')]
     except OSError as e:
@@ -79,33 +81,44 @@ def process_json_files(directory, items, combined_output):
         #items.append(ItemValue(hostname, 'updates.raw', json.dumps([data]).replace("'", '"')))
         items.append(ItemValue(hostname, 'updates.raw', json.dumps([data])))
 
-def send_to_zabbix(sender, items, combined_output):
-    """Send data to Zabbix and append the response to combined_output."""
+def random_tmp_path(length=8):
+    # Generate a random string
+    return '/tmp/' + ''.join(random.choices(string.ascii_letters + string.digits, k=length))    
+
+def zbx_send_data(sender, items, combined_output):
+    # Send data to Zabbix and append the response to combined_output
     response = sender.send(items)
     combined_output += f"Response from Zabbix: {response}\n\n"
     return combined_output
 
+def zbx_send_log(sender, items, datalog):
+    # Send data to Zabbix and print the response
+    response = sender.send_value(ZABBIX_DEF_HOSTNAME, 'ansible.result', datalog)
+    print(f"Response from Zabbix for ansible.result: {response}")
+
 def main():
     items = []
     combined_output = ""
+    temp_path = random_tmp_path()
     zabbix_sender = Sender(server=ZABBIX_SERVER, port=ZABBIX_PORT)
 
+    # Define arguments to modify Ansible execution
     parser = argparse.ArgumentParser(description='Run Ansible playbook with optional parameters')
     parser.add_argument('--playbook', default=PLAYBOOK_PATH, help='Path to the playbook template')
     parser.add_argument('--inventory', default=INVENTORY_PATH, help='Path to the inventory file')
     parser.add_argument('--limit', help='Limit the execution to a specific group or host')
     parser.add_argument('--upgrade', default='no', help='Set apt/yum upgrade parameter (yes or no)')
     parser.add_argument('--sshcheck', default='true', help='Check SSH key (true or false)')
-    parser.add_argument('--lockstate', default='none', help='Set packages to lock/hold or unlock/unhold (lock or unlock)')
+    parser.add_argument('--lockstate', default='nochange', help='Set packages to lock/hold or unlock/unhold (lock or unlock)')
     parser.add_argument('--lockpackages', default='', help='Which packages to lock/hold or unlock/unhold. Use along with --lockstate')
     parser.add_argument('--become', default='no', help='Escalate privileges (yes or no) Default: no')
 
     args = parser.parse_args()
-
-    clean_temp_directory('/tmp/updates/')
+    
     os.environ['ANSIBLE_HOST_KEY_CHECKING'] = args.sshcheck.lower()
     packages_split = args.lockpackages.split() if args.lockpackages else []
-    
+
+    clean_temp_directory('/tmp/updates/')
     generate_playbook(args.playbook, '/tmp/sec_compliance_playbook.tmp', args.upgrade, args.lockstate, packages_split, args.become)
     
     ansible_result = run_ansible_playbook('/tmp/sec_compliance_playbook.tmp', args.inventory, args.limit)
@@ -114,7 +127,7 @@ def main():
     process_json_files('/tmp/updates/', items, combined_output)
 
     if items:
-        combined_output = send_to_zabbix(zabbix_sender, items, combined_output)
+        combined_output = zbx_send_data(zabbix_sender, items, combined_output)
     
     with open(ansible_result.stdout.name, 'r') as stdout_file:
         stdout_content = stdout_file.read()
@@ -125,7 +138,7 @@ def main():
     clean_stderr = remove_ansi_escape_codes(stderr_content)
     combined_output += f"STDOUT:\n{clean_stdout}\n\nSTDERR:\n{clean_stderr}"
 
-    response = zabbix_sender.send_value(ZABBIX_DEF_HOSTNAME, 'ansible.result', combined_output)
+    response = zbx_send_log(zabbix_sender, 'ansible.result', combined_output)
     print(f"Response from Zabbix for ansible.result: {response}")
 
 if __name__ == "__main__":
