@@ -77,8 +77,8 @@ Note on locking packages: For some versions of yum I noticed that it does not wo
   - Log audit
   - Autorized processes
   - /var/run/reboot-required
-  - /etc/group
-  - /etc/passwd
+  - /etc/group (new groups, or users assigned to root or sudo groups)
+  - /etc/passwd (already in Zabbix default template, maybe check for new users)
 - Improve triggers using Zabbix 7.0
 - Add option to: Apt full-upgrade/Yum distro-sync
 - Add Dnf and Apk modules
