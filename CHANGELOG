@@ -1,3 +1,16 @@
+1.9
+Major changes:
+- YAML-based playbook fully dynamic generation directly from Python using PyYAML, removing tasks that are not enterely needed (e.g., only APT manager is used) and allowing to easily add/replace tasks. As a result, the linux_security_compliance.yaml file has been removed.
+- Reworked command-line arguments to provide more intuitive and flexible options. Can now override configuration values via command-line arguments (e.g., Zabbix server, inventory file, package manager type, etc.).
+- Introduced more flexibility for choosing the package manager and for selecting which packages to lock/unlock (at the same time).
+- Better error handling and debug info.
+
+Changes:
+- Renamed ZABBIX_DEF_HOSTNAME to ZABBIX_HOST.
+- Added a check to prevent running the script more than once by verifying the existence of, this script, temporary files.
+- Added debug flag to check YAML, data sent to Zabbix and other variables values.
+- Now removes all temporary files when the script completes successfully.
+
 1.1
 Changes:
 - Added new params to lock/hold and unlock/unhold packages.
