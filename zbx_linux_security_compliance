@@ -5,17 +5,11 @@ ZABBIX_SERVER = "127.0.0.1"
 ZABBIX_PORT = "10051"
 ZABBIX_HOST = 'MyHost' # Zabbix host where logs from this script will be sent
 
-# Package manager. Add/remove entries as needed
-PKG_MGR = ["YUM", "APT"] # Can be overridden via arguments
-
-# Common distros for each package manager. Add/remove entries as needed
-YUM_DISTRO = "['RedHat', 'AlmaLinux', 'CentOS', 'Rocky', 'OracleLinux', 'Amazon']"
-APT_DISTRO = "['Ubuntu', 'Debian', 'Kali', 'LinuxMint', 'Pop!_OS', 'elementary OS']"
+# Allowed package manager. Add/remove entries as needed
+PKG_MGR = ["yum", "apt", "dnf"] # Can be overridden via arguments
 
 # Temporary directory and template path
-TMP_DIR = "/tmp/sec_updates/"
-TMP_PLAYBOOK = f"{TMP_DIR}security_playbook.yaml"
-
+TMP_DIR = "/tmp/sec_updates"
 
 ##### Do not edit from here #####
 import ansible_runner
@@ -27,6 +21,7 @@ import yaml
 import sys
 import shutil
 from zabbix_utils import ItemValue, Sender
+from collections import defaultdict
 
 # Clean ANSI escape codes from output
 def remove_ansi_escape_codes(text):
@@ -67,12 +62,12 @@ def send_to_zabbix(sender, items, combined_output):
     combined_output += f"Response from Zabbix: {response}\n\n"
     return combined_output
 
-def build_playbook(args, packages_split):
+def build_playbook(args, packages_split, package_mgr):
     # Start playbook
     play = {
         "name": "Linux updates management",
         "hosts": "all",
-        "gather_facts": True,
+        "gather_facts": False,
         "become": args.become,
         "vars": {
             "packages_to_handle": packages_split,
@@ -83,170 +78,141 @@ def build_playbook(args, packages_split):
 
     # Add tasks as needed
     tasks = play["tasks"]
-    
+ 
     # Always check YUM version lock is installed
-    if "YUM" in args.package_manager:
+    if package_mgr in ("yum", "dnf"):
         tasks += [
             {
                 "name": "Ensure yum-plugin-versionlock",
                 "yum": {"name": "yum-plugin-versionlock", "state": "present"},
-                "loop": "{{ packages_to_handle }}",
-                "when": [
-                    "ansible_facts['distribution'] in " + YUM_DISTRO
-                ]
+                "loop": "{{ packages_to_handle }}"
             }
         ]
 
     # Only if lock/unlock packages found
     if args.unlock_packages:
-        if "YUM" in args.package_manager:
+        if package_mgr in ("yum", "dnf"):
             tasks += [
                 {
                     "name": "Unlock packages (YUM)",
                     "community.general.yum_versionlock": {"name": "{{ item }}", "state": "absent"},
                     "loop": "{{ packages_to_handle }}",
-                    "register": "unlock_result",
-                    "when": [
-                        "ansible_facts['distribution'] in " + YUM_DISTRO
-                    ]
+                    "register": "unlock_result"
                 }
             ]
-        if "APT" in args.package_manager:
+        if package_mgr in ("apt"):
             tasks += [
                 {
                     "name": "Unlock packages (APT)",
                     "command": "apt-mark unhold {{ item }}",
                     "loop": "{{ packages_to_handle }}",
-                    "register": "unlock_result",
-                    "when": [
-                        "ansible_facts['distribution'] in " + APT_DISTRO
-                    ]
+                    "register": "unlock_result"
                 }
             ]
     if args.lock_packages:
-        if "YUM" in args.package_manager:
+        if package_mgr in ("yum", "dnf"):
             tasks += [
                 {
                     "name": "Lock packages (YUM)",
                     "community.general.yum_versionlock": {"name": "{{ item }}", "state": "present"},
                     "loop": "{{ packages_to_handle }}",
-                    "register": "lock_result",
-                    "when": [
-                        "ansible_facts['distribution'] in " + YUM_DISTRO
-                    ]
+                    "register": "lock_result"
                 }
             ]
-        if "APT" in args.package_manager:
+        if package_mgr in ("apt"):
             tasks += [
                 {
                     "name": "Lock packages (APT)",
                     "command": "apt-mark hold {{ item }}",
                     "loop": "{{ packages_to_handle }}",
-                    "register": "lock_result",
-                    "when": [
-                        "ansible_facts['distribution'] in " + APT_DISTRO
-                    ]
+                    "register": "lock_result"
                 }
             ]
 
 
     # Always get locked packages
-    if "YUM" in args.package_manager:
+    if package_mgr in ("yum", "dnf"):
         tasks += [
             {
                 "name": "Get locked (YUM)",
                 "shell": "yum versionlock",
                 "register": "lock_packages",
-                "changed_when": False,
-                "when": "ansible_facts['distribution'] in " + YUM_DISTRO
+                "changed_when": False
             },
             {
                 "name": "Parse YUM locked",
                 "set_fact": {
                     "locked": "{{ lock_packages.stdout_lines | select('match', '^(0:([^0-9-]+)|^([^:]+)-0:).*') | map('regex_replace', '^(0:([^0-9-]+)|^([^:]+)-0:).*', '{\"name\": \"\\2\\3\"}') | map('from_json') | list | unique }}"
                 },
-                "changed_when": False,
-                "when": "ansible_facts['distribution'] in " + YUM_DISTRO
+                "changed_when": False
             }
         ]
-    if "APT" in args.package_manager:
+    if package_mgr in ("apt"):
         tasks += [
             {
                 "name": "Get locked (APT)",
                 "shell": "apt-mark showhold",
                 "register": "lock_packages",
-                "changed_when": False,
-                "when": "ansible_facts['distribution'] in " + APT_DISTRO
+                "changed_when": False
             },
             {
                 "name": "Parse APT locked",
                 "set_fact": {
                     "locked": "{{ lock_packages.stdout_lines | map('regex_replace', '^(.*)$', '{\"name\": \"\\1\"}') | map('from_json') | list }}"
                 },
-                "changed_when": False,
-                "when": "ansible_facts['distribution'] in " + APT_DISTRO
+                "changed_when": False
             }
         ]
             
     # Only if argument --upgrade
     if args.upgrade == "yes":
-        if "YUM" in args.package_manager:
+        if package_mgr in ("yum", "dnf"):
             tasks += [
                 {
                     "name": "Upgrade YUM",
                     "yum": {"name": "*", "state": "latest"},
-                    "register": "upgrade_result",
-                    "when": [
-                        "ansible_facts['distribution'] in " + YUM_DISTRO
-                    ]
+                    "register": "upgrade_result"
                 }
             ]
-        if "APT" in args.package_manager:
+        if package_mgr in ("apt"):
             tasks += [
                 {
                     "name": "Upgrade APT",
                     "apt": {"update_cache": True, "upgrade": "yes"},
                     "register": "upgrade_result",
-                    "changed_when": False,
-                    "when": [
-                        "ansible_facts['distribution'] in " + APT_DISTRO
-                    ]
+                    "changed_when": False
                 }
             ]
 
     # Always check for updates
-    if "YUM" in args.package_manager:
+    if package_mgr in ("yum", "dnf"):
         tasks += [
             {
                 "name": "Check YUM updates",
                 "yum": {"list": "updates"},
                 "register": "yum_updates",
-                "changed_when": False,
-                "when": "ansible_facts['distribution'] in " + YUM_DISTRO
+                "changed_when": False
             },
             {
                 "name": "Parse YUM updates",
                 "set_fact": {
                     "updates": "{{ yum_updates.results | list }}"
-                },
-                "when": "ansible_facts['distribution'] in " + YUM_DISTRO
+                }
             }
         ]
-    if "APT" in args.package_manager:
+    if package_mgr in ("apt"):
         tasks += [
             {
                 "name": "Check APT updates",
                 "shell": "apt list --upgradeable | grep -E '^[a-zA-Z0-9.-]+/' | awk -F/ '{print $1}'",
                 "register": "apt_updates",
-                "changed_when": False,
-                "when": "ansible_facts['distribution'] in " + APT_DISTRO
+                "changed_when": False
             },
             {
                 "name": "Parse APT updates",
                 "set_fact": {
                     "updates": "{{ apt_updates.stdout_lines | map('regex_replace', '^(.*)$', '{ \"name\": \"\\1\" }') | map('from_json') | list }}"
-                },
-                "when": "ansible_facts['distribution'] in " + APT_DISTRO
+                }
             }
         ]
 
@@ -273,7 +239,7 @@ def build_playbook(args, packages_split):
             "name": "Write updates to file",
             "lineinfile": {
                 "path": TMP_DIR + "/{{ filename }}",
-                "line": "{{ {'hostname': hostname, 'current_date': now(utc=true), 'updates': updates, 'locked_packages': locked | default([]), 'distro': ansible_facts['distribution'], 'distro_ver': ansible_facts['distribution_version'], 'kernel': ansible_facts['kernel'], 'ipv4_addresses': ansible_facts['all_ipv4_addresses'], 'ipv6_addresses': ansible_facts['all_ipv6_addresses']} | to_json }}",
+                "line": "{{ {'hostname': hostname, 'current_date': now(utc=true), 'updates': updates, 'locked_packages': locked | default([]), 'distro': ansible_facts['distribution'], 'distro_ver': ansible_facts['distribution_version'], 'kernel': ansible_facts['kernel']} | to_json }}",
                 "create": True,
                 "mode": "0644"
             },
@@ -281,16 +247,21 @@ def build_playbook(args, packages_split):
         }
     ]
 
+    #"ansible_selinux": {
+    #        "status": "disabled"
+    #    },
+
+
     # Finally, transform JSON to YAML playbook and write the file
-    with open(TMP_PLAYBOOK, "w") as f:
+    with open(f"{TMP_DIR}/{package_mgr}_playbook.yaml", "w") as f:
         yaml.dump([play], f, indent=2, sort_keys=False, default_flow_style=False)
 
 def main():
     # Check if another instance of this script is already running
-    if os.path.exists(TMP_PLAYBOOK):
-        print("Error: Script already running, or " + TMP_PLAYBOOK + " must be deleted manually.")
-        print("Exiting")
-        sys.exit(0)
+    #if os.path.exists(TMP_PLAYBOOK):
+    #    print("Error: Script already running, or " + TMP_PLAYBOOK + " must be deleted manually.")
+    #    print("Exiting")
+    #    sys.exit(0)
     
     # Create arguments
     parser = argparse.ArgumentParser()
@@ -298,7 +269,7 @@ def main():
     parser.add_argument('--zabbix-server', default=ZABBIX_SERVER)
     parser.add_argument('--zabbix-port', default=ZABBIX_PORT)
     parser.add_argument('--zabbix-host', default=ZABBIX_HOST)
-    parser.add_argument('--limit', '-l')
+    parser.add_argument('--limit', '-l', default='all')
     parser.add_argument('--upgrade', '-u', action='store_const', const='yes', default='no')
     parser.add_argument('--ignore-sshcheck', '-k', action='store_true')
     parser.add_argument('--become', '-b', action='store_const', const='yes', default='no')
@@ -315,6 +286,10 @@ def main():
     # Read string of packages and transform into a list
     packages_split = args.lock_packages.split() if args.lock_packages else []
     packages_split = args.unlock_packages.split() if args.unlock_packages else []
+
+    # Remove trailing '/' if any
+    global TMP_DIR  # Declare it as global to modify it
+    TMP_DIR = TMP_DIR.rstrip('/')
     
     # Prepare temp dir
     try:
@@ -324,12 +299,51 @@ def main():
     os.mkdir(TMP_DIR)
     
     try:
-        # Build playbook YAML    
-        build_playbook(args, packages_split)
+        # Gather package manager info
+        r1 = ansible_runner.run(module='setup', module_args='gather_subset=system', inventory=args.inventory, host_pattern=args.limit)
 
-        # Execute Ansible
-        ansible_result = ansible_runner.run(playbook=TMP_PLAYBOOK, inventory=args.inventory, limit=args.limit)
+        host_list = {}
+
+        for event in r1.events:
+            result = re.match(r'^runner_on_', event.get("event"))
+            if result:
+                host = event['event_data']['host']
+                if event.get("event") == "runner_on_ok":        
+                    facts = event['event_data']['res'].get('ansible_facts', {})
+                    host_list[host] = {
+                        'pkg_mgr': facts.get('ansible_pkg_mgr'),
+                        'distribution': facts.get('ansible_distribution'),
+                        'distribution_version': facts.get('ansible_distribution_version'),
+                        'kernel': facts.get('ansible_kernel')
+                    }
+                else:
+                    host_list[host] = {'error': event.get("event")}
+
+        print(host_list)
+
+        pkg_mgr_list = defaultdict(list)
+
+        for host, data in host.items():
+            pkg_mgr = data.get("pkg_mgr")
+            if pkg_mgr:
+                pkg_mgr_list[pkg_mgr].append(host)
+
+        # Optional: convert to regular dict if needed
+        pkg_mgr_list = dict(pkg_mgr_list)
+
+        for pkgmgr in pkg_mgr_list:
+            if pkgmgr in args.package_manager:
+                # Build playbook YAML per pkg_mgr
+                build_playbook(args, packages_split, pkgmgr)
+
+                # Execute Ansible (fork)
+                r2 = ""
+                #r2 = ansible_runner.run(playbook=f"{TMP_DIR}/{package_mgr}_playbook.yaml", inventory=args.inventory, limit=args.limit)
         
+        print(pkg_mgr_list)
+
+        sys.exit(0)
+
         # Prepare Zabbix connection
         sender = Sender(server=args.zabbix_server, port=args.zabbix_port)    
 
@@ -342,9 +356,9 @@ def main():
             combined_output = send_to_zabbix(sender, items, combined_output)
             
         # Collect STDOUT and STDERR to log, to be sent to Zabbix into the host using "ZABBIX_HOST"
-        with open(ansible_result.stdout.name) as f:
+        with open(r2.stdout.name) as f:
             clean_stdout = remove_ansi_escape_codes(f.read())
-        with open(ansible_result.stderr.name) as f:
+        with open(r2.stderr.name) as f:
             clean_stderr = remove_ansi_escape_codes(f.read())
         combined_output += f"\nSTDOUT:\n{clean_stdout}\n\nSTDERR:\n{clean_stderr}"
         
