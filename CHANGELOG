@@ -1,17 +1,25 @@
 2.0
 Major changes:
+- Code was refactored.
+- Nows this script consist in mainly 3 phases. 
+	1st an execution of a single Ansible command to get facts (and reduced modules).
+	2nd Contructs playbook for each pkgmanager detected on previous phase and allowed via variable/argument and executes them (and only on the reachable hosts, again filtered on 1st phase) on parallel (as a try to speedup execution and avoid bottlenecks to wait until all YUM pkg ended before proceeding to APT, and so on).
+	3rd after Ansible executions, recompile all results and send them to Zabbix.
 - YAML-based playbook fully dynamic generation directly from Python using PyYAML, removing tasks that are not enterely needed (e.g., only APT manager is used) and allowing to easily add/replace tasks. As a result, the ``linux_security_compliance.yaml`` file has been removed.
-- Reworked command-line arguments to provide more intuitive and flexible options. Can now override configuration values via command-line arguments (e.g., Zabbix server, inventory file, package manager type, etc.).
+- Reworked command-line arguments to provide more intuitive and flexible options. Ensure to check README. Can now override configuration values via command-line arguments (e.g., Zabbix server, inventory file, package managers allowed, etc.).
 - Introduced more flexibility for choosing the package manager and for selecting which packages to lock/unlock (at the same time).
-- Better error handling and debug info.
+- Added verbose and simplified output if silent.
+- Reworked logging to the Zabbix host.
 
-Changes:
+Minor changes:
 - Renamed ZABBIX_DEF_HOSTNAME to ZABBIX_HOST.
-- Added a check to prevent running the script more than once by verifying the existence of, this script, temporary files.
+- Removed ZABBIX_PORT. As now ZABBIX_SERVER is able to be set as array for cluster nodes (e.g., ['zabbix-node-1:10051', 'zabbix-node-2', 'zabbix-node-3:10055'])
+- Added a check to prevent running the script more than once by verifying the existence of ".lock" file in the temporary path.
 - Added debug flag to check YAML, data sent to Zabbix and other variables values.
 - Now removes all temporary files when the script completes successfully.
 - Added more distros by default to each package manager.
 - Added user login as default variable or via argument.
+- Arguments/variables validation for ZABBIX_SERVER and PKG_MGR (e.g. ['str1', 'str2']). Now accepts "str1, str2" or "str1 str2" and will try to correct.
 
 1.1
 Changes:

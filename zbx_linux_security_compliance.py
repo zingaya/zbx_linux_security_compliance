@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # Constants for file paths and Zabbix configuration. Can be overridden via arguments
 INVENTORY_PATH = '/etc/ansible/hosts'
-ZABBIX_SERVER = '127.0.0.1'
-ZABBIX_PORT = '10051'
+ZABBIX_SERVER = ['127.0.0.1:10051']
 ZABBIX_HOST = 'MyHost' # Zabbix host where logs from this script will be sent
 USER_LOGIN = 'root'
+
+# Change default for Ansible forks (default: 5)
+#ANSIBLE_FORKS = 5
 
 # Allowed package manager. Add/remove entries as needed
 PKG_MGR = ["yum", "apt", "dnf"] # Can be overridden via arguments
@@ -55,12 +57,6 @@ def process_json_files(directory, items, combined_output, host_list):
         data.update(host_info)  # Use update for merging dictionaries
 
         items.append(ItemValue(hostname, "updates.raw", json.dumps([data])))
-
-# Send data to Zabbix
-def send_to_zabbix(sender, items, combined_output):
-    response = sender.send(items)
-    combined_output += f"Response from Zabbix: {response}\n\n"
-    return combined_output
 
 def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr):
     # Start playbook
@@ -136,15 +132,13 @@ def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr
             {
                 "name": "Get locked (YUM)",
                 "shell": "yum versionlock",
-                "register": "lock_packages",
-                "changed_when": False
+                "register": "lock_packages"
             },
             {
                 "name": "Parse YUM locked",
                 "set_fact": {
                     "locked": "{{ lock_packages.stdout_lines | select('match', '^(0:([^0-9-]+)|^([^:]+)-0:).*') | map('regex_replace', '^(0:([^0-9-]+)|^([^:]+)-0:).*', '{\"name\": \"\\2\\3\"}') | map('from_json') | list | unique }}"
-                },
-                "changed_when": False
+                }
             }
         ]
     if package_mgr in ("apt"):
@@ -152,15 +146,13 @@ def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr
             {
                 "name": "Get locked (APT)",
                 "shell": "apt-mark showhold",
-                "register": "lock_packages",
-                "changed_when": False
+                "register": "lock_packages"
             },
             {
                 "name": "Parse APT locked",
                 "set_fact": {
                     "locked": "{{ lock_packages.stdout_lines | map('regex_replace', '^(.*)$', '{\"name\": \"\\1\"}') | map('from_json') | list }}"
-                },
-                "changed_when": False
+                }
             }
         ]
             
@@ -179,8 +171,7 @@ def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr
                 {
                     "name": "Upgrade APT",
                     "apt": {"update_cache": True, "upgrade": "yes"},
-                    "register": "upgrade_result",
-                    "changed_when": False
+                    "register": "upgrade_result"
                 }
             ]
 
@@ -190,8 +181,7 @@ def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr
             {
                 "name": "Check YUM updates",
                 "yum": {"list": "updates"},
-                "register": "yum_updates",
-                "changed_when": False
+                "register": "yum_updates"
             },
             {
                 "name": "Parse YUM updates",
@@ -205,8 +195,7 @@ def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr
             {
                 "name": "Check APT updates",
                 "shell": "apt list --upgradeable | grep -E '^[a-zA-Z0-9.-]+/' | awk -F/ '{print $1}'",
-                "register": "apt_updates",
-                "changed_when": False
+                "register": "apt_updates"
             },
             {
                 "name": "Parse APT updates",
@@ -221,30 +210,27 @@ def build_playbook(args, packages_split_lock, packages_split_unlock, package_mgr
         {
             "name": "Get hostname",
             "shell": "(zabbix_agent2 -t agent.hostname || zabbix_agent -t agent.hostname || zabbix_agentd -t agent.hostname) 2>/dev/null | grep hostname || cat /etc/hostname",
-            "register": "cmd_output",
-            "changed_when": False
+            "register": "cmd_output"
         },
         {
-            "name": "Set hostname",
-            "set_fact": {"hostname": "{{ cmd_output.stdout }}"}
-        },
-        {
-            "name": "Generate filename",
-            "set_fact": {
-                "filename": "{{ hostname | regex_replace('.*\\|(.+?)\\]', '\\1') }}.json"
-            },
-            "delegate_to": "localhost"
-        },
-        {
-            "name": "Write updates to file",
-            "lineinfile": {
-                "path": TMP_DIR + "/{{ filename }}",
-                "line": "{{ {'hostname': hostname, 'inventory_hostname': inventory_hostname, 'current_date': now(utc=true), 'updates': updates, 'locked_packages': locked | default([])} | to_json }}",
-                #, 'distro': ansible_facts['distribution'], 'distro_ver': ansible_facts['distribution_version'], 'kernel': ansible_facts['kernel']} 
-                "create": True,
-                "mode": "0644"
-            },
-            "delegate_to": "localhost"
+            "name": "Prepare filename and write updates",
+            "block": [
+                {
+                    "set_fact": {
+                        "hostname": "{{ cmd_output.stdout }}",
+                        "filename": "{{ cmd_output.stdout | regex_replace('.*\\|(.+?)\\]', '\\1') }}.json"
+                    }
+                },
+                {
+                    "lineinfile": {
+                        "path": TMP_DIR + "/{{ filename }}",
+                        "line": "{{ {'hostname': hostname, 'inventory_hostname': inventory_hostname, 'current_date': now(utc=true), 'updates': updates, 'locked_packages': locked | default([])} | to_json }}",
+                        "create": True,
+                        "mode": "0644"
+                    },
+                    "delegate_to": "localhost"
+                }
+            ]
         }
     ]
 
@@ -285,7 +271,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inventory', '-i', default=INVENTORY_PATH)
     parser.add_argument('--zabbix-server', default=ZABBIX_SERVER)
-    parser.add_argument('--zabbix-port', default=ZABBIX_PORT)
     parser.add_argument('--zabbix-host', default=ZABBIX_HOST)
     parser.add_argument('--limit', '-l', default='all')
     parser.add_argument('--upgrade', '-u', action='store_const', const='yes', default='no')
@@ -295,6 +280,7 @@ def main():
     parser.add_argument('--user', default=USER_LOGIN)
     #parser.add_argument('--dry-run', action='store_true') # Not implemented yet
     #parser.add_argument('--privkey', '-K') # Not implemented yet
+    parser.add_argument('--forks', '-f')
     parser.add_argument('--package-manager', default=PKG_MGR)
     parser.add_argument('--lock-packages', '-L')
     parser.add_argument('--unlock-packages', '-U')
@@ -309,16 +295,30 @@ def main():
 
         # Set user login
         os.environ['ANSIBLE_REMOTE_USER'] = args.user
-
+        
+        # No color output for Ansible. This affects some loggin filtering later in this script.
+        os.environ['ANSIBLE_NOCOLOR'] = '1'
+           
+        # Set Ansible forks
+        if args.forks: os.environ['ANSIBLE_FORKS'] = args.forks 
+        
+        # Value should be a list.
+        if not isinstance(args.package_manager, (tuple, list)):
+            args.package_manager = args.package_manager.replace(',', ' ').strip().split()
+            
+        if not isinstance(args.zabbix_server, (tuple, list)):
+            args.zabbix_server = args.zabbix_server.replace(',', ' ').strip().split()
+            
         # verbose info
         printverbose(f"\nContribute to https://github.com/zingaya/zbx_linux_security_compliance\n")
         printverbose("ANSIBLE_HOST_KEY_CHECKING: " + os.environ['ANSIBLE_HOST_KEY_CHECKING'])
         printverbose("ANSIBLE_REMOTE_USER: " + os.environ['ANSIBLE_REMOTE_USER'])            
         printverbose("PKG_MGR: " + str(args.package_manager))
-        printverbose("ZABBIX_SERVER: " + args.zabbix_server)
-        printverbose("ZABBIX_PORT: " + args.zabbix_port)
+        printverbose("ZABBIX_SERVER: " + str(args.zabbix_server))
         printverbose("ZABBIX_HOST: " + args.zabbix_host)
         printverbose("INVENTORY: " + args.inventory)
+        
+        # To do: Need more validations
         
         # Read string of packages and transform into a list
         packages_split_lock = args.lock_packages.split() if args.lock_packages else []
@@ -326,12 +326,8 @@ def main():
 
         # Gather package manager info
         print("Gatthering hosts data...")
-        r1 = ansible_runner.run(module='setup', module_args='gather_subset=system', inventory=args.inventory, host_pattern=args.limit, streamer='file', quiet=not args.verbose)
+        r1 = ansible_runner.run(module='setup', module_args='gather_subset=system', inventory=args.inventory, host_pattern=args.limit, private_data_dir=TMP_DIR, streamer='file', quiet=not args.verbose)
         
-        # To do
-        #[WARNING]: Could not match supplied host pattern, ignoring: 10.0.0.1
-        #[WARNING]: No hosts matched, nothing to do
-
         host_list = {}
 
         for event in r1.events:
@@ -372,7 +368,7 @@ def main():
 
                 limit_host = ','.join(pkg_mgr_list[pkgmgr])
 
-                # Execute Ansible (fork)
+                # Execute Ansible (async)
                 ident, r2 = ansible_runner.run_async(private_data_dir=TMP_DIR, playbook=f"{TMP_DIR}/{pkgmgr}_playbook.yaml", inventory=args.inventory, limit=limit_host, streamer='file', quiet=not args.verbose)
                 printverbose(f"Started playbook for {pkgmgr} on: {limit_host}")
                 runners.append((pkgmgr, r2))
@@ -385,10 +381,10 @@ def main():
                     runners.remove((pkgmgr, r2))
             time.sleep(1)  # Poll every second
 
-        print("Ansible playbook(s) finished")
+        print("Ansible playbook(s) finished. Sending data to Zabbix...")
 
         # Prepare Zabbix connection
-        sender = Sender(server=args.zabbix_server, port=args.zabbix_port)    
+        sender = Sender(clusters=[args.zabbix_server])    
 
         # Build JSON for each host, as individual items, to be sent to Zabbix
         items = []
@@ -396,29 +392,43 @@ def main():
         process_json_files(TMP_DIR, items, combined_output, host_list)
         # If items exist, send them to Zabbix
         if items:            
-            combined_output = send_to_zabbix(sender, items, combined_output)
+            # Send data to Zabbix
+            response = sender.send(items)
+            combined_output += f"All values sent to Zabbix. Response: {response}\n\n"
 
-            printverbose("Sent to Zabbix: " + str(items))
+            printverbose("Data sent to Zabbix: " + str(items))
             printverbose(combined_output)
 
         # To do
-        # combined_output = "Good hosts:\n"
-          
-
-        # Gatther failed hosts, stdout & stderr for each Ansible run
-        combined_output = "Failed hosts:\n"
+        # why is not updating?
+        # can remove fields hostname and ansible hostname?
+        # test with multple dnf apt yum
+        # what happens when locking and failed?
+        
+        # Gatther hosts failed to get facts, stdout & stderr for each Ansible run
+        combined_output += "Ansible failed hosts:\n"
 
         for host, err_detail in host_list.items():
             if 'error' in err_detail:
                 combined_output += f"{host}: {err_detail['error']}\n"
 
-        combined_output += "Ansible log:"
+        combined_output += "Ansible log (only failed):\n"
         output_files = Path(TMP_DIR + "/artifacts")
         for output_file in output_files.rglob('stdout'):
             with open(output_file) as f:
-                filtered_lines = [line for line in f if line.startswith("PLAY [") or line.startswith("TASK [") or line.startswith("failed:")]
-                for line in filtered_lines:
-                    combined_output += line
+                filtered_lines = [line.rstrip('\n') for line in f if line.startswith(('[WARNING]', "PLAY [", "TASK [", "failed:"))]
+                if filtered_lines:
+                    combined_output += "\n".join(filtered_lines) + "\n"
+
+            stderr_file = output_file.with_name('stderr')
+            with open(stderr_file) as f:
+                stderr_lines = [line.rstrip('\n') for line in f if line.strip()]
+                if stderr_lines:
+                    combined_output += "Stderr:\n"
+                    combined_output += "\n".join(stderr_lines) + "\n"
+
+            printverbose(f"Stdout file: {output_file}")
+            printverbose(f"Stderr file: {stderr_file}")
 
         printverbose(combined_output)
         
@@ -426,15 +436,16 @@ def main():
         response = sender.send_value(args.zabbix_host, "ansible.result", combined_output)
 
         if json.loads(str(response)).get('failed') == 1:
-            print("I could not send logs to Zabbix. Check hostname variable and if the host exists on Zabbix with the template.")
+            print("Couldn't send logs to Zabbix. Check hostname variable and if the host exists on Zabbix with the template.")
         
         printverbose(f"Response from Zabbix (log host): {response}")
+        print("All done!")
          
     except Exception as e:
         msg = str(e)
         if "Couldn't connect to all of cluster nodes" in msg:
             # For better understanding to "what" is not connecting
-            msg = msg.replace("all of cluster nodes", "Zabbix API")
+            msg = msg.replace("cluster", "Zabbix cluster")
         print(f"Error: {msg}")
     
     finally:
