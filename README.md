@@ -37,7 +37,7 @@ Ansible connects to each host using SSH keys. Hosts must have SSH pub key in the
 
 Install required Python libraries:
 
-    pip install ansible ansible-runner argparse shutil json re os zabbix-utils pyyaml
+    pip install ansible ansible-runner argparse shutil json re os zabbix-utils pyyaml requests
 
 Install required Ansible collection:
 

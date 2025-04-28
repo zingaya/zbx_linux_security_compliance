@@ -1,5 +1,5 @@
 zabbix_export:
-  version: '6.4'
+  version: '7.2'
   template_groups:
     - uuid: 26f42bba0c4448c290fa5423bb4a2664
       name: 'Custom Templates'
@@ -14,12 +14,12 @@ zabbix_export:
           name: 'Linux distribution'
           type: DEPENDENT
           key: os.distribution
-          history: 30d
+          history: 1w
           value_type: CHAR
           preprocessing:
             - type: JSONPATH
               parameters:
-                - $..distro.first()
+                - $..distribution.first()
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
                 - 1d
@@ -39,7 +39,7 @@ zabbix_export:
           preprocessing:
             - type: JSONPATH
               parameters:
-                - $..distro_ver.first()
+                - $..distribution_version.first()
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
                 - 1d
@@ -75,7 +75,75 @@ zabbix_export:
               expression: 'find(/Linux - Security and compliance/os.kernel,,"iregexp","{$KERNEL.DEPRECATED}")=1'
               name: 'Linux kernel deprecated'
               opdata: 'Kernel: {ITEM.LASTVALUE1}'
+              priority: INFO
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: e09986c0da9f4ec2a29f36fc65e8f3fe
+          name: 'SELinux status'
+          type: DEPENDENT
+          key: os.selinux
+          history: 30d
+          value_type: TEXT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $..selinux.status.first()
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: updates.raw
+          tags:
+            - tag: component
+              value: os-selinux
+            - tag: component
+              value: security
+          triggers:
+            - uuid: bda48bef1c7f4b128bd236957744670a
+              expression: 'last(/Linux - Security and compliance/os.selinux)<>"enabled"'
+              name: 'SELinux is not enabled'
+              priority: AVERAGE
+              description: 'Potential security issue'
+              tags:
+                - tag: scope
+                  value: security
+        - uuid: 4599a40b2ead4fa59c349bcb2a28cb57
+          name: 'Locked updates (list)'
+          type: DEPENDENT
+          key: updates.lock.list
+          history: 1w
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var obj = JSON.parse(value);
+                  names = '';
+                  var locked_packages = obj[0].locked_packages;
+                  for (var i = 0; i < locked_packages.length; i++) {
+                      var name = locked_packages[i].name;
+                      names += name + '\n';
+                  }
+                  return names;
+                  };
+                  
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          master_item:
+            key: updates.raw
+          tags:
+            - tag: component
+              value: security
+            - tag: component
+              value: updates
+          triggers:
+            - uuid: 2068736a311a47689ab156607d0a2026
+              expression: 'change(/Linux - Security and compliance/updates.lock.list)>0'
+              name: 'Locked packages have changed'
               priority: WARNING
+              manual_close: 'YES'
               tags:
                 - tag: scope
                   value: security
@@ -83,6 +151,7 @@ zabbix_export:
           name: 'Pending updates'
           type: DEPENDENT
           key: updates.pending
+          history: 90d
           preprocessing:
             - type: JSONPATH
               parameters:
@@ -102,19 +171,13 @@ zabbix_export:
             - tag: component
               value: updates
           triggers:
-            - uuid: e36f6833042c4c1f8449d781cf7717ca
-              expression: 'last(/Linux - Security and compliance/updates.pending)=9999'
-              name: 'Error when retrieving updates'
-              priority: WARNING
-              tags:
-                - tag: scope
-                  value: security
             - uuid: 76680ea2326b4f698727861d1107a2d9
               expression: |
-                nodata(/Linux - Security and compliance/updates.pending,1w)=1
+                nodata(/Linux - Security and compliance/updates.pending,{$AUDIT.ALERT})=1
                 or
-                count(/Linux - Security and compliance/updates.pending,1w)=0
-              name: 'No new audit data since 1 week'
+                count(/Linux - Security and compliance/updates.pending,{$AUDIT.ALERT})=0
+              name: 'No new audit data'
+              event_name: 'No new audit data (since {$AUDIT.ALERT})'
               priority: WARNING
               description: |
                 Check if the script was successfully executed in this host.
@@ -125,13 +188,29 @@ zabbix_export:
                 - tag: scope
                   value: security
             - uuid: ac79dd0531f746b4be6571f24197d70f
-              expression: 'last(/Linux - Security and compliance/updates.pending)>0'
+              expression: |
+                last(/Linux - Security and compliance/updates.pending)>={$PENDING.MINIMUM}
+                and
+                {$PENDING.MINIMUM}>0
               name: 'Pending updates'
               opdata: 'Pending: {ITEM.LASTVALUE1}'
               priority: INFO
               dependencies:
                 - name: 'Error when retrieving updates'
-                  expression: 'last(/Linux - Security and compliance/updates.pending)=9999'
+                  expression: 'find(/Linux - Security and compliance/updates.pending.list,,"iregexp","Error:")=1'
+                - name: 'Pending updates'
+                  expression: 'min(/Linux - Security and compliance/updates.pending,{$PENDING.REMINDER.TIME})>={$PENDING.REMINDER.COUNT}'
+              tags:
+                - tag: scope
+                  value: security
+            - uuid: 44f444a92cd2441ca526de22e767a3f1
+              expression: 'min(/Linux - Security and compliance/updates.pending,{$PENDING.REMINDER.TIME})>={$PENDING.REMINDER.COUNT}'
+              name: 'Pending updates'
+              opdata: 'Pending: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: 'Error when retrieving updates'
+                  expression: 'find(/Linux - Security and compliance/updates.pending.list,,"iregexp","Error:")=1'
               tags:
                 - tag: scope
                   value: security
@@ -139,7 +218,7 @@ zabbix_export:
           name: 'Pending updates (list)'
           type: DEPENDENT
           key: updates.pending.list
-          history: 30d
+          history: 1w
           value_type: TEXT
           preprocessing:
             - type: JAVASCRIPT
@@ -155,7 +234,8 @@ zabbix_export:
                           names += name + '\n';
                       }
                       return names;
-                  };                  
+                  };
+                  
           master_item:
             key: updates.raw
           tags:
@@ -163,6 +243,14 @@ zabbix_export:
               value: security
             - tag: component
               value: updates
+          triggers:
+            - uuid: e36f6833042c4c1f8449d781cf7717ca
+              expression: 'find(/Linux - Security and compliance/updates.pending.list,,"iregexp","Error:")=1'
+              name: 'Error when retrieving updates'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: security
         - uuid: 8a9723bd6e004cc89245e8d79241c860
           name: 'Get updates'
           type: TRAP
@@ -173,27 +261,21 @@ zabbix_export:
             - tag: component
               value: raw
       macros:
+        - macro: '{$AUDIT.ALERT}'
+          value: 1w
+          description: 'If there is no data since this time'
         - macro: '{$KERNEL.DEPRECATED}'
           value: '^[4]\.(1[0-4]|[0-9](?![0-9]))|^[1-3]\.[0-9]'
           description: 'Deprecated kernel regex'
-    - uuid: 65d5cdc6b2ff4b5eb064d3683ef4ffd5
-      template: 'Linux - Security and compliance - ansible log'
-      name: 'Linux - Security and compliance - ansible log'
-      description: |
-        This template contains only the item to get the ansible playbook execution log
-        Modify the zabbix_def_hostname in the python script to match the host where you assigned the template.
-      groups:
-        - name: 'Custom Templates'
-      items:
-        - uuid: 38e27d1975cd44eba30a4685d3f50e21
-          name: 'Ansible result'
-          type: TRAP
-          key: ansible.result
-          value_type: TEXT
-          description: 'Keep track of execution logs of the ansible playbook'
-          tags:
-            - tag: component
-              value: ansible-log
+        - macro: '{$PENDING.MINIMUM}'
+          value: '1'
+          description: 'Minimum updates to trigger an alert for updates'
+        - macro: '{$PENDING.REMINDER.COUNT}'
+          value: '4'
+          description: 'After this amount, combined with the time, will increase their severity'
+        - macro: '{$PENDING.REMINDER.TIME}'
+          value: 2w
+          description: 'After this time, combined with the count, the trigger will increase their severity'
   triggers:
     - uuid: 084c8c341daa4521929838aa22ec826e
       expression: |

@@ -5,8 +5,17 @@ ZABBIX_SERVER = ['127.0.0.1:10051']
 ZABBIX_HOST = 'MyHost' # Zabbix host where logs from this script will be sent
 USER_LOGIN = 'root'
 
-# Change default for Ansible forks (default: 5)
+# Zabbix server URL and API token
+# If True, will generate a temporal inventory file from Zabbix database, using hostname and groupname
+INVENTORY_FROM_ZABBIX = True
+ZABBIX_API = 'http://zabbix.local/zabbix/api_jsonrpc.php'
+API_TOKEN = 'apitoken12345'
+
+# Change default for Ansible forks (optional, default: 5)
 #ANSIBLE_FORKS = 5
+
+# SSH Key path (default: '~/.ssh/id_rsa')
+SSH_KEY = '~/.ssh/id_rsa'
 
 # Allowed package manager. Add/remove entries as needed
 PKG_MGR = ["yum", "apt", "dnf"] # Can be overridden via arguments
@@ -24,6 +33,8 @@ import yaml
 import sys
 import shutil
 import time
+import requests
+import concurrent.futures
 from pathlib import Path
 from zabbix_utils import ItemValue, Sender
 from collections import defaultdict
@@ -245,9 +256,81 @@ def printverbose(string):
     if verbose:
         print(string)
 
+# List Zabbix hosts
+def list_hosts():
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {API_TOKEN}'
+    }
+    data = {
+        "jsonrpc": "2.0",
+        "method": "host.get",
+        "params": {
+            "output": ["hostid", "name", "groupids", "status"],
+            "selectHostGroups": "extend",
+            "selectInterfaces": "extend",
+            "filter": {"status": 0}
+        },
+        "id": 1
+    }
+    post_response = requests.post(ZABBIX_API, data=json.dumps(data), headers=headers)
+    hosts = post_response.json().get('result', [])
+    return hosts
+
+# Process JSON API
+def process_host(host):
+    selected_interface = None
+
+    for interface in host.get('interfaces', []):
+        if (interface['useip'] == '1' and interface['ip'] != '127.0.0.1') or interface['useip'] == '0':
+            selected_interface = interface
+            break
+
+    if selected_interface:
+        # We need to replace spaces with underscores, so it can be used in YAML
+        hostname = host['name'].replace(" ", "_")
+        ansible_host = selected_interface['ip'] if selected_interface['useip'] == '1' else selected_interface['dns']
+        hostgroups = [group['name'].replace(" ", "_") for group in host.get('hostgroups', [])]
+        return hostname, ansible_host, hostgroups
+    return None
+
+# Create the Ansible inventory YAML file
+def create_ansible_inventory(PATH):
+    # Get the number of CPUs and set max_workers to half
+    cpu_count = os.cpu_count()
+    max_workers = cpu_count // 2  # Half of the CPUs
+
+    inventory = {'all': {'hosts': {}}}
+
+    # Get the list of hosts
+    hosts = list_hosts()
+    printverbose("Zabbix API response: " + json.dumps(hosts))
+
+    # Multithread JSON data processing
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = executor.map(process_host, hosts)
+
+    for result in results:
+        if result:
+            hostname, ansible_host, hostgroups = result
+            
+
+            # Add host to inventory with groups
+            inventory['all']['hosts'][hostname] = {'ansible_host': ansible_host}
+            
+            # Add hostgroups to inventory
+            for group in hostgroups:
+                if group not in inventory:
+                    inventory[group] = {'hosts': []}
+                inventory[group]['hosts'] = {hostname: []}
+
+    with open(PATH, 'w') as f:
+        yaml.dump(inventory, f, default_flow_style=False)
+
+    print("Ansible hosts.yaml file created successfully!")
+
 def main():
     print("Initializing...")
-    printverbose(f"Contribute to https://github.com/zingaya/zbx_linux_security_compliance\n")
 
     # Remove trailing '/' if any
     global TMP_DIR  # Declare it as global to modify it
@@ -270,26 +353,29 @@ def main():
 
     # Create arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inventory', '-i', default=INVENTORY_PATH)
-    parser.add_argument('--zabbix-server', default=ZABBIX_SERVER)
-    parser.add_argument('--zabbix-host', default=ZABBIX_HOST)
-    parser.add_argument('--limit', '-l', default='all')
-    parser.add_argument('--upgrade', '-u', action='store_const', const='yes', default='no')
-    parser.add_argument('--ignore-sshcheck', '-k', action='store_true')
-    parser.add_argument('--become', '-b', action='store_const', const='yes', default='no')
-    parser.add_argument('--verbose', '-v', action='store_true')
-    parser.add_argument('--user', default=USER_LOGIN)
+    parser.add_argument('--inventory', '-i', default=INVENTORY_PATH, help="Path to the inventory file.")
+    parser.add_argument('--zabbix-server', default=ZABBIX_SERVER, help="The Zabbix server FQDN or IP address.")
+    parser.add_argument('--zabbix-host', default=ZABBIX_HOST, help="The Zabbix host to send logs.")
+    parser.add_argument('--limit', '-l', default='all', help="Limit the scope of the operation (e.g., 'host1' or 'group1'). Default is 'all'.")
+    parser.add_argument('--upgrade', '-u', action='store_const', const='yes', default='no', help="Set to 'yes' to enable upgrade mode (default is 'no').")
+    parser.add_argument('--ignore-sshcheck', '-k', action='store_true', help="Ignore SSH check (useful for testing without valid SSH keys).")
+    parser.add_argument('--become', '-b', action='store_const', const='yes', default='no', help="Run commands with elevated privileges (default is 'no').")
+    parser.add_argument('--verbose', '-v', action='count', default=0, help="Increase verbosity. Use -v for basic verbosity, -vv for more detailed.")
+    parser.add_argument('--user', default=USER_LOGIN, help="Username for authentication.")
+    parser.add_argument('--ssh-key', '-K', dest='sshkey', default=SSH_KEY, help="Path to the SSH private key for authentication.")
+    parser.add_argument('--forks', '-f', help="Number of parallel forks to use during the operation (default is 5)")
+    parser.add_argument('--package-manager', default=PKG_MGR, help="Package manager to use (e.g., apt, yum, dnf).")
+    parser.add_argument('--lock-packages', '-L', help="Lock specific packages to prevent updates or changes.")
+    parser.add_argument('--unlock-packages', '-U', help="Unlock specific packages for updates or changes.")
     #parser.add_argument('--dry-run', action='store_true') # Not implemented yet
-    parser.add_argument('--ssh-key', '-K', default='.ssh/id_rsa.pub') # Not implemented yet
-    parser.add_argument('--forks', '-f')
-    parser.add_argument('--package-manager', default=PKG_MGR)
-    parser.add_argument('--lock-packages', '-L')
-    parser.add_argument('--unlock-packages', '-U')
+
     try:
         args = parser.parse_args()
-        # verbose flag
+        
+        # Set verbose var
         global verbose
         verbose = args.verbose
+        printverbose("Contribute to https://github.com/zingaya/zbx_linux_security_compliance")
 
         # Change SSH host key checking. Same as 'ssh -o StrictHostKeyChecking=no'
         os.environ['ANSIBLE_HOST_KEY_CHECKING'] = 'false' if args.ignore_sshcheck else 'true'
@@ -299,17 +385,48 @@ def main():
         
         # No color output for Ansible. This affects some loggin filtering later in this script.
         os.environ['ANSIBLE_NOCOLOR'] = '1'
+
+        # SSH key path
+        os.environ['ANSIBLE_PRIVATE_KEY_FILE'] = args.sshkey
            
         # Set Ansible forks
-        if args.forks: os.environ['ANSIBLE_FORKS'] = args.forks 
+        if args.forks: os.environ['ANSIBLE_FORKS'] = args.forks
         
         # Validations
         # Value should be a list.
         if not isinstance(args.package_manager, (tuple, list)):
             args.package_manager = args.package_manager.replace(',', ' ').strip().split()            
         if not isinstance(args.zabbix_server, (tuple, list)):
-            args.zabbix_server = args.zabbix_server.replace(',', ' ').strip().split()        
-        # To do: Need more validations
+            args.zabbix_server = args.zabbix_server.replace(',', ' ').strip().split()  
+        
+        # Create Ansible hosts file from Zabbix
+        if INVENTORY_FROM_ZABBIX:
+            args.inventory = f"{TMP_DIR}/hosts.yaml"
+            create_ansible_inventory(args.inventory)
+            print("Created Ansible inventory from Zabbix API: " + args.inventory)
+            if args.verbose:
+                with open(args.inventory) as f:
+                    file_contents = f.read()
+                    print("Ansible inventory contents:\n" + file_contents)
+
+        # Prepare Zabbix connection
+        sender = Sender(clusters=[args.zabbix_server])
+
+        # To do: Need more validations.
+        #   ZABBIX_HOST: is valid IP/FQDN?
+        #   INVENTORY_PATH: is a valid path? exists?
+        #   SSH_KEY: is a valid path? exists?
+        #   TMP_Dir: is a valid path?
+        #   ANSIBLE_FORKS: is an interger?
+        # can remove fields hostname and ansible hostname?
+        # test with multple dnf apt yum
+        # how many hosts can the API return and handle? same for sender. How many data/bytes?
+        # inventory / ansible host/group - make case insensitive
+        # call from zabbix (manual action host)
+        # hostsgroups zabbix yaml inventory not all hosts are being created
+
+        # Initialize var for later use
+        combined_output = ""
         
         # Read string of packages and transform into a list
         packages_split_lock = args.lock_packages.split() if args.lock_packages else []
@@ -317,25 +434,34 @@ def main():
 
         # Gather package manager info
         print("Gatthering hosts data...")
-        r1 = ansible_runner.run(module='setup', module_args='gather_subset=system', inventory=args.inventory, host_pattern=args.limit, private_data_dir=TMP_DIR, streamer='file', ssh_key=args.ssh_key, quiet=not args.verbose)
+        r1 = ansible_runner.run(
+            module='setup',
+            module_args='gather_subset=system',
+            inventory=args.inventory,
+            host_pattern=args.limit,
+            private_data_dir=TMP_DIR,
+            streamer='file',
+            quiet=(args.verbose == 0),
+            verbosity=max(0, args.verbose - 1)
+        )
         
         host_list = {}
-
         for event in r1.events:
-            result = re.match(r'^runner_on_', event.get("event"))
-            if result:
+            match = re.match(r'^runner_on_', event.get("event"))
+            if match:
                 host = event['event_data']['host']
-                if event.get("event") == "runner_on_ok":        
+                if event.get("event") == "runner_on_ok":
                     facts = event['event_data']['res'].get('ansible_facts', {})
                     host_list[host] = {
-                        'pkg_mgr': facts.get('ansible_pkg_mgr'),
-                        'distribution': facts.get('ansible_distribution'),
-                        'distribution_version': facts.get('ansible_distribution_version'),
-                        'kernel': facts.get('ansible_kernel'),
-                        'selinux': facts.get('ansible_selinux')
+                        "pkg_mgr": facts.get('ansible_pkg_mgr'),
+                        "distribution": facts.get('ansible_distribution'),
+                        "distribution_version": facts.get('ansible_distribution_version'),
+                        "kernel": facts.get('ansible_kernel'),
+                        "selinux": facts.get('ansible_selinux')
                     }
-                else:
-                    host_list[host] = {'error': event.get("event")}
+                elif event.get("event") == "runner_on_unreachable":
+                    msg_json = re.search(r'({.*)', event.get("stdout", "{}").strip().replace("\r\n", ""))
+                    host_list[host] = {"error": event.get("event"), "msg": json.loads(msg_json.group(1))}
 
         pkg_mgr_list = defaultdict(list)
 
@@ -344,58 +470,60 @@ def main():
             if pkg_mgr:
                 pkg_mgr_list[pkg_mgr].append(host)
 
-        printverbose("Inventory details: " + str(host_list))
-        printverbose("Package manager grouping: " + str(dict(pkg_mgr_list)))
+        printverbose("Inventory result: " + json.dumps(host_list))
+        printverbose("Package manager grouping: " + json.dumps(dict(pkg_mgr_list)))        
 
         # Execute Ansible playbooks for each package manager
         runners = []
 
-        print("Running Ansible playbook(s)...")
-        for pkgmgr in pkg_mgr_list:
-            # Check if pkg_mgr is in "allowed"
-            if pkgmgr in args.package_manager:
-                # Build playbook YAML per pkg_mgr
-                build_playbook(args, packages_split_lock, packages_split_unlock, pkgmgr)
+        # Do nothing and jump directly to send report to zabbix
+        if not pkg_mgr_list:
+            print('Nothing to do')
+        else:
+            print("Running Ansible playbook(s)...")
+            for pkgmgr in pkg_mgr_list:
+                # Check if pkg_mgr is in "allowed"
+                if pkgmgr in args.package_manager:
+                    # Build playbook YAML per pkg_mgr
+                    build_playbook(args, packages_split_lock, packages_split_unlock, pkgmgr)
 
-                limit_host = ','.join(pkg_mgr_list[pkgmgr])
+                    limit_host = ','.join(pkg_mgr_list[pkgmgr])
 
-                # Execute Ansible (async)
-                ident, r2 = ansible_runner.run_async(private_data_dir=TMP_DIR, playbook=f"{TMP_DIR}/{pkgmgr}_playbook.yaml", inventory=args.inventory, limit=limit_host, streamer='file', ssh_key=args.ssh_key, quiet=not args.verbose)
-                printverbose(f"Started playbook for {pkgmgr} on: {limit_host}")
-                runners.append((pkgmgr, r2))
+                    # Execute Ansible (async)
+                    ident, r2 = ansible_runner.run_async(
+                        private_data_dir=TMP_DIR,
+                        playbook=f"{TMP_DIR}/{pkgmgr}_playbook.yaml",
+                        inventory=args.inventory,
+                        limit=limit_host,
+                        streamer='file',
+                        quiet=(args.verbose == 0),
+                        verbosity=max(0, args.verbose - 1)
+                    )
+                    printverbose(f"Started playbook for {pkgmgr} on: {limit_host}")
+                    runners.append((pkgmgr, r2))
 
-        # Wait for all to finish by polling their status
-        while runners:
-            for pkgmgr, r2 in list(runners):  # Copy the list to prevent modification during iteration
-                if r2.status == 'successful' or r2.status == 'failed' or r2.status == 'canceled':
-                    printverbose(f"{pkgmgr} finished with status: {r2.status}, rc={r2.rc}")
-                    runners.remove((pkgmgr, r2))
-            time.sleep(1)  # Poll every second
+            # Wait for all to finish by polling their status
+            while runners:
+                for pkgmgr, r2 in list(runners):  # Copy the list to prevent modification during iteration
+                    if r2.status == 'successful' or r2.status == 'failed' or r2.status == 'canceled':
+                        printverbose(f"{pkgmgr} finished with status: {r2.status}, rc={r2.rc}")
+                        runners.remove((pkgmgr, r2))
+                time.sleep(1)  # Poll every second
 
-        print("Ansible playbook(s) finished. Sending data to Zabbix...")
+            print("Ansible playbook(s) finished. Sending data to Zabbix...")
 
-        # Prepare Zabbix connection
-        sender = Sender(clusters=[args.zabbix_server])    
+            # Build JSON for each host, as individual items, to be sent to Zabbix
+            items = []
+            process_json_files(TMP_DIR, items, combined_output, host_list)
+            # If items exist, send them to Zabbix
+            if items:            
+                # Send data to Zabbix
+                response = sender.send(items)
+                combined_output += f"All values sent to Zabbix. Response: {response}"
 
-        # Build JSON for each host, as individual items, to be sent to Zabbix
-        items = []
-        combined_output = ""
-        process_json_files(TMP_DIR, items, combined_output, host_list)
-        # If items exist, send them to Zabbix
-        if items:            
-            # Send data to Zabbix
-            response = sender.send(items)
-            combined_output += f"All values sent to Zabbix. Response: {response}\n\n"
+                printverbose("Data sent to Zabbix: " + str(items))
+                printverbose(combined_output)
 
-            printverbose("Data sent to Zabbix: " + str(items))
-            printverbose(combined_output)
-
-        # To do
-        # why is not updating?
-        # can remove fields hostname and ansible hostname?
-        # test with multple dnf apt yum
-        # what happens when locking and failed?
-        
         # Gatther hosts failed to get facts, stdout & stderr for each Ansible run
         combined_output += "Ansible failed hosts:\n"
 
@@ -403,7 +531,7 @@ def main():
             if 'error' in err_detail:
                 combined_output += f"{host}: {err_detail['error']}\n"
 
-        combined_output += "Ansible log (only failed):\n"
+        combined_output += "Ansible log (filtered failed only):\n"
         output_files = Path(TMP_DIR + "/artifacts")
         for output_file in output_files.rglob('stdout'):
             with open(output_file) as f:
@@ -417,27 +545,28 @@ def main():
                 if stderr_lines:
                     combined_output += "Stderr:\n"
                     combined_output += "\n".join(stderr_lines) + "\n"
-
-            printverbose(f"Stdout file: {output_file}")
-            printverbose(f"Stderr file: {stderr_file}")
-
-        printverbose(combined_output)
-        
+    
         # Send log to Zabbix
-        response = sender.send_value(args.zabbix_host, "ansible.result", combined_output)
-
-        if json.loads(str(response)).get('failed') == 1:
-            print("Couldn't send logs to Zabbix. Check hostname variable and if the host exists on Zabbix with the template.")
-        
-        printverbose(f"Response from Zabbix (log host): {response}")
-        print("All done!")
+        try:
+            response = sender.send_value(args.zabbix_host, "ansible.result", combined_output)
+            if json.loads(str(response)).get('failed') == 1:
+                print(f"Couldn't send logs to host '{args.zabbix_host}'. Check ZABBIX_HOST var and if the host exists on Zabbix, and have the template.")
+            
+            printverbose(f"Response from Zabbix (log host): {response}")
+            print("All done!")
+        except Exception as e:
+            print(f"Error: {e}")
          
     except Exception as e:
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        else:
+            if "Couldn't connect to all of cluster nodes" in msg:
+                # For better understanding to "what" is not connecting
+                msg = msg.replace("cluster", "Zabbix cluster")
+            print(f"Error: {msg}")
         msg = str(e)
-        if "Couldn't connect to all of cluster nodes" in msg:
-            # For better understanding to "what" is not connecting
-            msg = msg.replace("cluster", "Zabbix cluster")
-        print(f"Error: {msg}")
     
     finally:
         # Clean up temporary files
