@@ -247,6 +247,7 @@ def printverbose(string):
 
 def main():
     print("Initializing...")
+    printverbose(f"Contribute to https://github.com/zingaya/zbx_linux_security_compliance\n")
 
     # Remove trailing '/' if any
     global TMP_DIR  # Declare it as global to modify it
@@ -279,7 +280,7 @@ def main():
     parser.add_argument('--verbose', '-v', action='store_true')
     parser.add_argument('--user', default=USER_LOGIN)
     #parser.add_argument('--dry-run', action='store_true') # Not implemented yet
-    #parser.add_argument('--privkey', '-K') # Not implemented yet
+    parser.add_argument('--ssh-key', '-K', default='.ssh/id_rsa.pub') # Not implemented yet
     parser.add_argument('--forks', '-f')
     parser.add_argument('--package-manager', default=PKG_MGR)
     parser.add_argument('--lock-packages', '-L')
@@ -302,22 +303,12 @@ def main():
         # Set Ansible forks
         if args.forks: os.environ['ANSIBLE_FORKS'] = args.forks 
         
+        # Validations
         # Value should be a list.
         if not isinstance(args.package_manager, (tuple, list)):
-            args.package_manager = args.package_manager.replace(',', ' ').strip().split()
-            
+            args.package_manager = args.package_manager.replace(',', ' ').strip().split()            
         if not isinstance(args.zabbix_server, (tuple, list)):
-            args.zabbix_server = args.zabbix_server.replace(',', ' ').strip().split()
-            
-        # verbose info
-        printverbose(f"\nContribute to https://github.com/zingaya/zbx_linux_security_compliance\n")
-        printverbose("ANSIBLE_HOST_KEY_CHECKING: " + os.environ['ANSIBLE_HOST_KEY_CHECKING'])
-        printverbose("ANSIBLE_REMOTE_USER: " + os.environ['ANSIBLE_REMOTE_USER'])            
-        printverbose("PKG_MGR: " + str(args.package_manager))
-        printverbose("ZABBIX_SERVER: " + str(args.zabbix_server))
-        printverbose("ZABBIX_HOST: " + args.zabbix_host)
-        printverbose("INVENTORY: " + args.inventory)
-        
+            args.zabbix_server = args.zabbix_server.replace(',', ' ').strip().split()        
         # To do: Need more validations
         
         # Read string of packages and transform into a list
@@ -326,7 +317,7 @@ def main():
 
         # Gather package manager info
         print("Gatthering hosts data...")
-        r1 = ansible_runner.run(module='setup', module_args='gather_subset=system', inventory=args.inventory, host_pattern=args.limit, private_data_dir=TMP_DIR, streamer='file', quiet=not args.verbose)
+        r1 = ansible_runner.run(module='setup', module_args='gather_subset=system', inventory=args.inventory, host_pattern=args.limit, private_data_dir=TMP_DIR, streamer='file', ssh_key=args.ssh_key, quiet=not args.verbose)
         
         host_list = {}
 
@@ -369,7 +360,7 @@ def main():
                 limit_host = ','.join(pkg_mgr_list[pkgmgr])
 
                 # Execute Ansible (async)
-                ident, r2 = ansible_runner.run_async(private_data_dir=TMP_DIR, playbook=f"{TMP_DIR}/{pkgmgr}_playbook.yaml", inventory=args.inventory, limit=limit_host, streamer='file', quiet=not args.verbose)
+                ident, r2 = ansible_runner.run_async(private_data_dir=TMP_DIR, playbook=f"{TMP_DIR}/{pkgmgr}_playbook.yaml", inventory=args.inventory, limit=limit_host, streamer='file', ssh_key=args.ssh_key, quiet=not args.verbose)
                 printverbose(f"Started playbook for {pkgmgr} on: {limit_host}")
                 runners.append((pkgmgr, r2))
 
