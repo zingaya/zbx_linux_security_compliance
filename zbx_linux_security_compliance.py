@@ -307,15 +307,24 @@ def get_zabbix_hosts():
 def process_json_host(hosts):
     selected_interface = None
 
-    for interface in hosts.get('interfaces', []):
-        if (interface['useip'] == '1' and interface['ip'] != '127.0.0.1') or interface['useip'] == '0':
-            selected_interface = interface
-            break
+    # Try to find macro {$ANSIBLE_HOST}
+    ansible_host = next(
+        (m["value"] for m in hosts.get("macros", []) if m["macro"] == "{$ANSIBLE_HOST}"),
+        None
+    )
 
-    if selected_interface:
-        # We need to replace spaces with underscores, so it can be used in YAML
+    # Fallback to get the first valid interface
+    if not ansible_host:
+        for interface in hosts.get('interfaces', []):
+            if (interface['useip'] == '1' and interface['ip'] != '127.0.0.1') or interface['useip'] == '0':
+                selected_interface = interface
+                break
+        if selected_interface:
+            ansible_host = selected_interface['ip'] if selected_interface['useip'] == '1' else selected_interface['dns']
+
+    # Return final JSON
+    if ansible_host:
         hostname = hosts['name'].replace(" ", "_")
-        ansible_host = selected_interface['ip'] if selected_interface['useip'] == '1' else selected_interface['dns']
         hostgroups = [group['name'].replace(" ", "_").replace("/", "_") for group in hosts.get('hostgroups', [])]
         return hostname, ansible_host, hostgroups
     return None

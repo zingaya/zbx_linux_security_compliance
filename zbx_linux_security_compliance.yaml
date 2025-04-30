@@ -108,6 +108,15 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: security
+        - uuid: 8a9723bd6e004cc89245e8d79241c860
+          name: 'Get updates'
+          type: TRAP
+          key: report.raw
+          history: '0'
+          value_type: TEXT
+          tags:
+            - tag: component
+              value: raw
         - uuid: 4599a40b2ead4fa59c349bcb2a28cb57
           name: 'Locked updates (list)'
           type: DEPENDENT
@@ -127,7 +136,6 @@ zabbix_export:
                   }
                   return names;
                   };
-                  
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
                 - 1d
@@ -198,14 +206,14 @@ zabbix_export:
               dependencies:
                 - name: 'Error when retrieving updates'
                   expression: 'find(/Linux - Security and compliance/updates.pending.list,,"iregexp","Error:")=1'
-                - name: 'Pending updates'
+                - name: 'Pending updates since {$PENDING.REMINDER.TIME}'
                   expression: 'min(/Linux - Security and compliance/updates.pending,{$PENDING.REMINDER.TIME})>={$PENDING.REMINDER.COUNT}'
               tags:
                 - tag: scope
                   value: security
             - uuid: 44f444a92cd2441ca526de22e767a3f1
               expression: 'min(/Linux - Security and compliance/updates.pending,{$PENDING.REMINDER.TIME})>={$PENDING.REMINDER.COUNT}'
-              name: 'Pending updates'
+              name: 'Pending updates since {$PENDING.REMINDER.TIME}'
               opdata: 'Pending: {ITEM.LASTVALUE1}'
               priority: WARNING
               dependencies:
@@ -235,7 +243,6 @@ zabbix_export:
                       }
                       return names;
                   };
-                  
           master_item:
             key: report.raw
           tags:
@@ -251,16 +258,9 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: security
-        - uuid: 8a9723bd6e004cc89245e8d79241c860
-          name: 'Get updates'
-          type: TRAP
-          key: report.raw
-          history: '0'
-          value_type: TEXT
-          tags:
-            - tag: component
-              value: raw
       macros:
+        - macro: '{$ANSIBLE_HOST}'
+          description: 'Optional to define the IP or DNS name Ansible should use to connect to the host. Leave empty to use the first valid interface. This is only used when running the script that reads data from the Zabbix API.'
         - macro: '{$AUDIT.ALERT}'
           value: 1w
           description: 'If there is no data since this time'

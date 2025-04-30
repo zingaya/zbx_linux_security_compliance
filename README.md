@@ -21,7 +21,8 @@ It helps automate package updates, lock/unlock critical packages, and forward re
 - Target hosts must exist in Zabbix and be linked to the **"Linux - Security and compliance"** template, which includes the required items and triggers.
 - For logging, the **"Linux - Security and compliance - ansible log"** template can be added to the host running this script (typically a jump server) to trap logs sent via Zabbix sender.
 - When generating the Ansible inventory using the Zabbix API, any host that only has `127.0.0.1` as its interface will be ignored.
-- When quering Zabbix API, it will get the `templatedid` from **Linux - Security and compliance**. Don't change the name of the template.
+- When generating the Ansible inventory using the Zabbix API, hosts with only 127.0.0.1 as an interface will be ignored unless the {$ANSIBLE_HOST} macro is defined. This macro can also be used to override any interface address.
+- When querying Zabbix API, it will get the `templateid` from **Linux - Security and compliance**. Don't change the name of the template.
 - Ensure API user has correct permissions to read hosts and templates.
 
 ## Files included
