@@ -36,7 +36,7 @@ It helps automate package updates, lock/unlock critical packages, and forward re
 - SSH key pair
 - Ansible 2.9+
 - Python 3.9+
-- Zabbix 7.0+
+- Zabbix 7.2+
 
 Install required Python libraries:
 
@@ -58,6 +58,7 @@ Optionally:
 - API_TOKEN
 
 Additional parameters can be set or overridden via command-line arguments:
+
     -h, --help            show this help message and exit
     --inventory INVENTORY, -i INVENTORY
                           Path to the inventory file. Default is '/etc/ansible/hosts'.
@@ -93,7 +94,7 @@ Additional parameters can be set or overridden via command-line arguments:
   - List of listening ports.
   - Users logged in.
   - Log audit.
-  - Autorized processes.
+  - Autorized/Denied processes.
   - Check /var/run/reboot-required.
 - Implement a "dry-run" (ansible --check-mode).
 - Add APK (for Alpine distros).
