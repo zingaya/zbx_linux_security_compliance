@@ -24,7 +24,7 @@ zabbix_export:
               parameters:
                 - 1d
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: compliance
@@ -44,7 +44,7 @@ zabbix_export:
               parameters:
                 - 1d
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: compliance
@@ -64,7 +64,7 @@ zabbix_export:
               parameters:
                 - 1d
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: compliance
@@ -93,7 +93,7 @@ zabbix_export:
               parameters:
                 - 1d
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: os-selinux
@@ -132,7 +132,7 @@ zabbix_export:
               parameters:
                 - 1d
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: security
@@ -164,7 +164,7 @@ zabbix_export:
               error_handler: CUSTOM_VALUE
               error_handler_params: '9999'
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: security
@@ -237,7 +237,7 @@ zabbix_export:
                   };
                   
           master_item:
-            key: updates.raw
+            key: report.raw
           tags:
             - tag: component
               value: security
@@ -254,7 +254,7 @@ zabbix_export:
         - uuid: 8a9723bd6e004cc89245e8d79241c860
           name: 'Get updates'
           type: TRAP
-          key: updates.raw
+          key: report.raw
           history: '0'
           value_type: TEXT
           tags:
