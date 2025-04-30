@@ -22,6 +22,7 @@ It helps automate package updates, lock/unlock critical packages, and forward re
 - For logging, the **"Linux - Security and compliance - ansible log"** template can be added to the host running this script (typically a jump server) to trap logs sent via Zabbix sender.
 - When generating the Ansible inventory using the Zabbix API, any host that only has `127.0.0.1` as its interface will be ignored.
 - When quering Zabbix API, it will get the `templatedid` from **Linux - Security and compliance**. Don't change the name of the template.
+- Ensure API user has correct permissions to read hosts and templates.
 
 ## Files included
 
@@ -55,23 +56,34 @@ Optionally:
 - ZABBIX_API
 - API_TOKEN
 
-  Additional parameters can be set or overridden via command-line arguments:
-    --inventory: Path to the Ansible inventory file (default: /etc/ansible/hosts).
-    --zabbix-server: Zabbix server IP or FQDN.
-    --zabbix-port: Zabbix server port (default: 10051).
-    --zabbix-host: Zabbix host to send logs.
-    --limit: Limit operation to a specific host or group (default: all).
-    --upgrade: Enable upgrade mode (default: no).
-    --ignore-sshcheck: Ignore SSH host key checking (useful for testing without valid SSH keys).
-    --become: Use privilege escalation (default: no).
-    --verbose: Increase verbosity for debugging.
-    --user: SSH username for authentication.
-    --ssh-key: Path to the SSH private key for authentication.
-    --forks: Number of parallel forks to use during the operation (default: 5).
-    --package-manager: List of package managers (e.g., apt, yum, dnf).
-    --lock-packages: Lock specific packages to prevent updates.
-    --unlock-packages: Unlock specific packages for updates.
-    --timeout: Ansible SSH timeout (default: 10).
+Additional parameters can be set or overridden via command-line arguments:
+    -h, --help            show this help message and exit
+    --inventory INVENTORY, -i INVENTORY
+                          Path to the inventory file. Default is '/etc/ansible/hosts'.
+    --zabbix-server ZABBIX_SERVER
+                          The Zabbix server FQDN or IP address.
+    --zabbix-host ZABBIX_HOST
+                          The Zabbix host to send logs.
+    --limit LIMIT, -l LIMIT  
+                          Limit the scope of the operation (e.g., 'host1' or 'group1'). Default is 'all'.
+    --upgrade, -u         Set to 'yes' to enable upgrade mode (default is 'no').
+    --ignore-sshcheck, -k
+                          Ignore SSH check (useful for testing without valid SSH keys).
+    --become, -b          Run commands with elevated privileges (default is 'no').
+    --verbose, -v         Increase verbosity. Use -v for basic verbosity, -vv for more detailed.
+    --user USER           Username for authentication.
+    --ssh-key SSHKEY, -K SSHKEY
+                          Path to the SSH private key for authentication.
+    --forks FORKS, -f FORKS
+                          Number of parallel forks to use during the operation (default is 5).
+    --package-manager PACKAGE_MANAGER
+                          Package manager to use (e.g., apt, yum, dnf).
+    --lock-packages LOCK_PACKAGES, -L LOCK_PACKAGES
+                          Lock specific packages to prevent updates or changes.
+    --unlock-packages UNLOCK_PACKAGES, -U UNLOCK_PACKAGES
+                          Unlock specific packages for updates or changes.
+    --timeout TIMEOUT, -t TIMEOUT
+                        Ansible SSH timeout (default is 10).
 
 ## Some ideas to add in future realeases
 

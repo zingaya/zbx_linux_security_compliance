@@ -280,10 +280,10 @@ def get_zabbix_hosts():
     }
     try:
         post_response = requests.post(ZABBIX_API, data=json.dumps(data), headers=headers)
+        printverbose("Request response: " + post_response.json())
         templateid = post_response.json().get('result', [])
-        printverbose("Template ID: " + templateid[0].get('templateid'))
     except Exception as e:
-        return f"Error: {e}"   
+        return f"Error when retrieving templateid.\nError: {e}"
     
     data = {
         "jsonrpc": "2.0",
@@ -299,6 +299,7 @@ def get_zabbix_hosts():
     }
     try:
         post_response = requests.post(ZABBIX_API, data=json.dumps(data), headers=headers)
+        printverbose("Request response: " + post_response.json())
         hosts = post_response.json().get('result', [])
         return hosts
     except Exception as e:
@@ -526,6 +527,10 @@ def main():
                 with open(args.inventory) as f:
                     file_contents = f.read()
                     print("Ansible inventory contents:\n" + file_contents)
+        elif not "ZABBIX_API" in globals() and "API_TOKEN" in globals():
+            raise Exception(f"ZABBIX_API is not defined")
+        elif "ZABBIX_API" in globals() and not "API_TOKEN" in globals():
+            raise Exception(f"API_TOKEN is not defined")
         else:
             # Set and validate inventory file
             args.inventory = (
@@ -635,7 +640,7 @@ def main():
             if items:            
                 # Send data to Zabbix
                 response = sender.send(items)
-                combined_output += f"All values sent to Zabbix. Response: {response}"
+                combined_output += f"All values sent to Zabbix. Response: {response}\n"
 
                 printverbose("Data sent to Zabbix: " + str(items))
                 printverbose(combined_output)
