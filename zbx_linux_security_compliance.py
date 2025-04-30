@@ -277,7 +277,7 @@ def get_zabbix_hosts():
     }
     try:
         post_response = requests.post(ZABBIX_API, data=json.dumps(data), headers=headers)
-        printverbose("Request response: " + post_response.json())
+        printverbose("Request response: " + str(post_response.json()))
         templateid = post_response.json().get('result', [])
     except Exception as e:
         return f"Error when retrieving templateid.\nError: {e}"
@@ -297,7 +297,7 @@ def get_zabbix_hosts():
     }
     try:
         post_response = requests.post(ZABBIX_API, data=json.dumps(data), headers=headers)
-        printverbose("Request response: " + post_response.json())
+        printverbose("Request response: " + str(post_response.json()))
         hosts = post_response.json().get('result', [])
         return hosts
     except Exception as e:

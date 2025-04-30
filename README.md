@@ -24,6 +24,7 @@ It helps automate package updates, lock/unlock critical packages, and forward re
 - When generating the Ansible inventory using the Zabbix API, hosts with only 127.0.0.1 as an interface will be ignored unless the {$ANSIBLE_HOST} macro is defined. This macro can also be used to override any interface address.
 - When querying Zabbix API, it will get the `templateid` from **Linux - Security and compliance**. Don't change the name of the template.
 - Ensure API user has correct permissions to read hosts and templates.
+- When using the Zabbix API to retrieve hosts and host groups, any whitespace will be replaced with underscores. Note that `--limit` is case-sensitive — watch for uppercase letters.
 
 ## Files included
 
