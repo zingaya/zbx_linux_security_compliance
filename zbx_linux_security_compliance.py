@@ -432,26 +432,26 @@ def main():
             print(f"Error: Can't create temporary dir or .lock file at {TMP_DIR}")
             sys.exit(1)
 
-    # Create arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--inventory', '-i', help="Path to the inventory file. Default is '/etc/ansible/hosts'.")
-    parser.add_argument('--zabbix-server', default=ZABBIX_SERVER, help="The Zabbix server FQDN or IP address.")
-    parser.add_argument('--zabbix-host', default=ZABBIX_HOST, help="The Zabbix host to send logs.")
-    parser.add_argument('--limit', '-l', default='all', help="Limit the scope of the operation (e.g., 'host1' or 'group1'). Default is 'all'.")
-    parser.add_argument('--upgrade', '-u', action='store_const', const='yes', default='no', help="Set to 'yes' to enable upgrade mode (default is 'no').")
-    parser.add_argument('--ignore-sshcheck', '-k', action='store_true', help="Ignore SSH check (useful for testing without valid SSH keys).")
-    parser.add_argument('--become', '-b', action='store_const', const='yes', default='no', help="Run commands with elevated privileges (default is 'no').")
-    parser.add_argument('--verbose', '-v', action='count', default=0, help="Increase verbosity. Use -v for basic verbosity, -vv for more detailed.")
-    parser.add_argument('--user', default=USER_LOGIN, help="Username for authentication.")
-    parser.add_argument('--ssh-key', '-K', dest='sshkey', default=SSH_KEY, help="Path to the SSH private key for authentication.")
-    parser.add_argument('--forks', '-f', help="Number of parallel forks to use during the operation (default is 5).")
-    parser.add_argument('--package-manager', default=PKG_MGR, help="Package manager to use (e.g., apt, yum, dnf).")
-    parser.add_argument('--lock-packages', '-L', help="Lock specific packages to prevent updates or changes.")
-    parser.add_argument('--unlock-packages', '-U', help="Unlock specific packages for updates or changes.")    
-    parser.add_argument('--timeout', '-t', help="Ansible SSH timeout (default is 10).")
-    #parser.add_argument('--dry-run', action='store_true') # Not implemented yet
-
     try:
+        # Create arguments
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--inventory', '-i', help="Path to the inventory file. Default is '/etc/ansible/hosts'.")
+        parser.add_argument('--zabbix-server', default=ZABBIX_SERVER, help="The Zabbix server FQDN or IP address.")
+        parser.add_argument('--zabbix-host', default=ZABBIX_HOST, help="The Zabbix host to send logs.")
+        parser.add_argument('--limit', '-l', default='all', help="Limit the scope of the operation (e.g., 'host1' or 'group1'). Default is 'all'.")
+        parser.add_argument('--upgrade', '-u', action='store_const', const='yes', default='no', help="Set to 'yes' to enable upgrade mode (default is 'no').")
+        parser.add_argument('--ignore-sshcheck', '-k', action='store_true', help="Ignore SSH check (useful for testing without valid SSH keys).")
+        parser.add_argument('--become', '-b', action='store_const', const='yes', default='no', help="Run commands with elevated privileges (default is 'no').")
+        parser.add_argument('--verbose', '-v', action='count', default=0, help="Increase verbosity. Use -v for basic verbosity, -vv for more detailed.")
+        parser.add_argument('--user', default=USER_LOGIN, help="Username for authentication.")
+        parser.add_argument('--ssh-key', '-K', dest='sshkey', default=SSH_KEY, help="Path to the SSH private key for authentication.")
+        parser.add_argument('--forks', '-f', help="Number of parallel forks to use during the operation (default is 5).")
+        parser.add_argument('--package-manager', default=PKG_MGR, help="Package manager to use (e.g., apt, yum, dnf).")
+        parser.add_argument('--lock-packages', '-L', help="Lock specific packages to prevent updates or changes.")
+        parser.add_argument('--unlock-packages', '-U', help="Unlock specific packages for updates or changes.")    
+        parser.add_argument('--timeout', '-t', help="Ansible SSH timeout (default is 10).")
+        #parser.add_argument('--dry-run', action='store_true') # Not implemented yet
+    
         args = parser.parse_args()
         
         # Set verbose var
@@ -599,6 +599,7 @@ def main():
             for pkgmgr in pkg_mgr_list:
                 # Check if pkg_mgr is in "allowed"
                 if pkgmgr in args.package_manager:
+                    
                     # Build playbook YAML per pkg_mgr
                     build_playbook(args, packages_split_lock, packages_split_unlock, pkgmgr)
 
