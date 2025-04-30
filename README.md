@@ -91,10 +91,10 @@ Additional parameters can be set or overridden via command-line arguments:
 ## Examples
 
 ### Updates list:
-![Updates list](https://github.com/user-attachments/assets/9ad792e5-3c35-41e1-af66-7e8302febd88)
+![Updates list](docs/img/updates_list.png)
 
 ### Alerts:
-![Alerts](https://github.com/user-attachments/assets/e85c14ab-84a1-4949-b131-0dcc4f1a490d)
+![Alerts](docs/img/alerts.png)
 
 ## Some ideas to add in future realeases
 
