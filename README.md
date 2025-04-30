@@ -93,7 +93,7 @@ Additional parameters can be set or overridden via command-line arguments:
 ### Updates list:
 ![Updates list](https://github.com/user-attachments/assets/9ad792e5-3c35-41e1-af66-7e8302febd88)
 
-#### Alerts:
+### Alerts:
 ![Alerts](https://github.com/user-attachments/assets/e85c14ab-84a1-4949-b131-0dcc4f1a490d)
 
 ## Some ideas to add in future realeases
