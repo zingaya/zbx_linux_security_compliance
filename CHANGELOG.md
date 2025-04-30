@@ -33,6 +33,7 @@
 	  - Linux version: `..distro_ver.first()` → `..distribution_version.first()`
 	- Added new item: "Locked updates list".
 	- Renamed item key updates.raw to report.raw.
+	- Added macro {$ANSIBLE_HOST} to override any interface address when using Zabbix API.
 
 ## [1.1]
 ### Changes
