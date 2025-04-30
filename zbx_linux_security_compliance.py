@@ -271,9 +271,6 @@ def get_zabbix_hosts():
         "method": "template.get",
         "params": {
             "output": ["templateid"],
-            "selectHostGroups": "extend",
-            "selectInterfaces": "extend",
-            "selectParentTemplates": "extend",
             "filter": {"host": "Linux - Security and compliance"}
         },
         "id": 1
@@ -289,9 +286,10 @@ def get_zabbix_hosts():
         "jsonrpc": "2.0",
         "method": "host.get",
         "params": {
-            "output": ["hostid", "name", "groupids", "status"],
-            "selectHostGroups": "extend",
-            "selectInterfaces": "extend",
+            "output": ["name"],            
+            "selectHostGroups": ["name"],
+            "selectInterfaces": ["useip", "ip", "dns"],
+            "selectMacros": ["macro", "value"],
             "status": 0,
             "templateids": templateid[0].get('templateid')
         },
