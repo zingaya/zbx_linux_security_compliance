@@ -109,3 +109,4 @@ Additional parameters can be set or overridden via command-line arguments:
 - Add APK (for Alpine distros).
 - Make optional case insensitive when "--limit" hosts or hostgroups.
 - Use Zabbix action scripts to execute this script on a specific host (without Ansible inventory).
+- Zabbix API get.host get.hostgroups, export or list them in stdout.
