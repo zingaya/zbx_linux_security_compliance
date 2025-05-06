@@ -663,7 +663,7 @@ def main():
         output_files = Path(TMP_DIR + "/artifacts")
         for output_file in output_files.rglob('stdout'):
             with open(output_file) as f:
-                filtered_lines = [line.rstrip('\n') for line in f if line.startswith(('[WARNING]', "PLAY [", "TASK [", "failed:"))]
+                filtered_lines = [line.rstrip('\n') for line in f if line.startswith(('[WARNING]', "PLAY [", "TASK [", "failed:", "fatal:"))]
                 if filtered_lines:
                     combined_output += "\n".join(filtered_lines) + "\n"
 

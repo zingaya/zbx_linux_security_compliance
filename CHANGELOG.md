@@ -1,7 +1,8 @@
 # Changelog
 ## [2.0.1]
 ### Hotfix Changes
-- Zabbix API not correctly filtering disabled hosts. Corrected JSON to: "filter": {"status": 0},
+- Zabbix API not correctly filtering disabled hosts. Corrected JSON to: "filter": {"status": 0}
+- Added to Ansible log filter: "fatal:"
 
 ## [2.0]
 ### Major Changes
