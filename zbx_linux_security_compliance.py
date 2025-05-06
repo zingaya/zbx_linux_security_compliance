@@ -290,7 +290,7 @@ def get_zabbix_hosts():
             "selectHostGroups": ["name"],
             "selectInterfaces": ["useip", "ip", "dns"],
             "selectMacros": ["macro", "value"],
-            "status": 0,
+            "filter": {"status": 0},
             "templateids": templateid[0].get('templateid')
         },
         "id": 1
